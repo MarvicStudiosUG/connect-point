@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Connect Point</title>
+
+  <!-- Google Fonts: Inter + JetBrains Mono (for terminal) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Phosphor Icons (clean modern icons) -->
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="src/styles.css" />
+
+  <!-- Import Map: tells browser where to load React and Firebase modules from -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.3.1",
+        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Debug: catch any unhandled errors and show them on screen -->
+  <script>
+    window.onerror = function(msg, url, line) {
+      document.getElementById('root').innerHTML = 
+        '<div style="padding:20px; color:white; background:#1a1a2e; min-height:100vh;">' +
+        '<h2>❌ Error</h2>' +
+        '<p><b>Message:</b> ' + msg + '</p>' +
+        '<p><b>File:</b> ' + url + '</p>' +
+        '<p><b>Line:</b> ' + line + '</p>' +
+        '<p>Check your <code>src/config.js</code> keys and that all files exist.</p>' +
+        '</div>';
+    };
+  </script>
+
+  <!-- Main app script -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
