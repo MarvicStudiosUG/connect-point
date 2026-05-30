@@ -44,64 +44,52 @@ function App() {
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'solo': return <SoloChat />;
-      case 'duo': return <DuoChat />;
-      case 'rooms': return <Rooms />;
-      case 'settings': return <Settings />;
-      default: return <SoloChat />;
+      case 'solo': return React.createElement(SoloChat);
+      case 'duo': return React.createElement(DuoChat);
+      case 'rooms': return React.createElement(Rooms);
+      case 'settings': return React.createElement(Settings);
+      default: return React.createElement(SoloChat);
     }
   };
 
   if (loading) {
-    return (
-      <div className="container-center">
-        <div className="glass" style={{ padding: '2rem', textAlign: 'center' }}>
-          <p>Loading Connect Point...</p>
-        </div>
-      </div>
+    return React.createElement('div', { className: 'container-center' },
+      React.createElement('div', { className: 'glass', style: { padding: '2rem', textAlign: 'center' } },
+        React.createElement('p', null, 'Loading Connect Point...')
+      )
     );
   }
 
-  return (
-    <>
-      {!userProfile ? (
-        <Auth onLogin={() => {}} />
-      ) : (
-        <UserProvider user={userProfile}>
-          <div className="app-container">
-            <header className="app-header">
-              <h1 className="app-logo">Connect Point</h1>
-              <button className="theme-toggle-inline" onClick={toggleTheme}>
-                <i className={`ph ${theme === 'dark' ? 'ph-sun' : 'ph-moon'}`}></i>
-              </button>
-            </header>
+  if (!userProfile) {
+    return React.createElement(Auth, { onLogin: () => {} });
+  }
 
-            <main className="app-content">
-              {renderScreen()}
-            </main>
-
-            <nav className="bottom-nav">
-              {TABS.map(tab => (
-                <button
-                  key={tab.id}
-                  className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <i className={`ph ${tab.icon}`}></i>
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
-        </UserProvider>
-      )}
-    </>
+  return React.createElement(
+    UserProvider,
+    { user: userProfile },
+    React.createElement('div', { className: 'app-container' },
+      React.createElement('header', { className: 'app-header' },
+        React.createElement('h1', { className: 'app-logo' }, 'Connect Point'),
+        React.createElement('button', { className: 'theme-toggle-inline', onClick: toggleTheme },
+          React.createElement('i', { className: `ph ${theme === 'dark' ? 'ph-sun' : 'ph-moon'}` })
+        )
+      ),
+      React.createElement('main', { className: 'app-content' }, renderScreen()),
+      React.createElement('nav', { className: 'bottom-nav' },
+        TABS.map(tab => React.createElement('button', {
+          key: tab.id,
+          className: `nav-item ${activeTab === tab.id ? 'active' : ''}`,
+          onClick: () => setActiveTab(tab.id)
+        },
+          React.createElement('i', { className: `ph ${tab.icon}` }),
+          React.createElement('span', null, tab.label)
+        ))
+      )
+    )
   );
 }
 
 const root = createRoot(document.getElementById('root'));
 root.render(
-  <ThemeProvider>
-    <App />
-  </ThemeProvider>
+  React.createElement(ThemeProvider, null, React.createElement(App))
 );
