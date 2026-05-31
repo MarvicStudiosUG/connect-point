@@ -1,12 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useUser } from './UserContext.js';
 
 export default function SoloChat() {
-  const currentUser = useUser();
   const [history, setHistory] = useState(() => {
     const saved = localStorage.getItem('cp-terminal-history');
     return saved ? JSON.parse(saved) : [
-      { type: 'response', text: 'Welcome to CP Terminal. Type "help" to get started.' }
+      { type: 'response', text: 'Welcome to CP Terminal.\nType "help" to get started.' }
     ];
   });
   const [input, setInput] = useState('');
@@ -47,7 +45,6 @@ export default function SoloChat() {
     localStorage.setItem('cp-aliases', JSON.stringify(aliases));
   }, [aliases]);
 
-  // Scroll to bottom on new output
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
@@ -65,6 +62,12 @@ export default function SoloChat() {
     ]);
   };
 
+  // Format response text with a timestamp
+  const formatResponse = (text) => {
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${text}\n⏱ ${now}`;
+  };
+
   const executeCommand = useCallback(async (cmd) => {
     const trimmedCmd = cmd.trim();
     if (!trimmedCmd) return;
@@ -77,7 +80,6 @@ export default function SoloChat() {
     let parts = trimmedCmd.split(/\s+/);
     let mainCmd = parts[0].toLowerCase();
 
-    // Resolve alias
     if (aliases[mainCmd]) {
       const expansion = aliases[mainCmd].split(/\s+/);
       mainCmd = expansion[0].toLowerCase();
@@ -85,7 +87,6 @@ export default function SoloChat() {
     }
     const args = parts.slice(1);
 
-    // Handle clear with confirmation
     if (mainCmd === 'clear') {
       if (history.length > 2) {
         setShowClearConfirm(true);
@@ -100,7 +101,8 @@ export default function SoloChat() {
     if (showClearConfirm) setShowClearConfirm(false);
 
     // Cloud commands
-    if (['weather','define','crypto','joke','news','qr','ip','fact','randomuser','timezone'].includes(mainCmd)) {
+    const cloudCmds = ['weather','define','crypto','joke','news','qr','ip','fact','randomuser','timezone'];
+    if (cloudCmds.includes(mainCmd)) {
       setLoading(true);
       setHistory([...newHistory, { type: 'response', text: '⏳ Fetching...' }]);
       setInput('');
@@ -111,33 +113,33 @@ export default function SoloChat() {
             if (!args[0]) result = 'Usage: weather <city>';
             else {
               const city = args.join(' ');
-              const res = await fetchWithTimeout('https://wttr.in/' + encodeURIComponent(city) + '?format=%C+%t+%w');
+              const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%w`);
               if (!res.ok) throw new Error('City not found');
-              result = '🌤 ' + city + ': ' + (await res.text()).trim();
+              result = `🌤 ${city}: ${(await res.text()).trim()}`;
             }
             break;
           case 'define':
             if (!args[0]) result = 'Usage: define <word>';
             else {
-              const res = await fetchWithTimeout('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(args[0]));
+              const res = await fetchWithTimeout(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(args[0])}`);
               if (!res.ok) throw new Error('Word not found');
               const data = await res.json();
               const e = data[0];
-              result = '📚 ' + e.word + '\n';
+              let defs = '';
               e.meanings.slice(0,2).forEach(m => {
-                result += '  ' + m.partOfSpeech + ': ' + m.definitions[0].definition + '\n';
+                defs += `  ${m.partOfSpeech}: ${m.definitions[0].definition}\n`;
               });
-              result = result.trim();
+              result = `📚 ${e.word}\n${defs.trim()}`;
             }
             break;
           case 'crypto':
             if (!args[0]) result = 'Usage: crypto <coin_id>';
             else {
-              const res = await fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=' + encodeURIComponent(args[0]) + '&vs_currencies=usd');
+              const res = await fetchWithTimeout(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(args[0])}&vs_currencies=usd`);
               if (!res.ok) throw new Error('Coin not found');
               const data = await res.json();
               if (!data[args[0]]) throw new Error('Coin not found');
-              result = '💰 ' + args[0].toUpperCase() + ': $' + data[args[0]].usd;
+              result = `💰 ${args[0].toUpperCase()}: $${data[args[0]].usd}`;
             }
             break;
           case 'joke':
@@ -145,7 +147,7 @@ export default function SoloChat() {
               const res = await fetchWithTimeout('https://official-joke-api.appspot.com/random_joke');
               if (!res.ok) throw new Error('Joke fetch failed');
               const d = await res.json();
-              result = '😂 ' + d.setup + '\n   ' + d.punchline;
+              result = `😂 ${d.setup}\n   ${d.punchline}`;
             }
             break;
           case 'news':
@@ -155,26 +157,26 @@ export default function SoloChat() {
               const items = text.match(/<title>(?!NPR Topics:)([^<]+)<\/title>/g);
               if (items && items.length > 0) {
                 result = '📰 Latest from NPR:\n';
-                items.slice(0,5).forEach((t,i) => result += (i+1) + '. ' + t.replace(/<[^>]+>/g,'') + '\n');
+                items.slice(0,5).forEach((t,i) => result += `${i+1}. ${t.replace(/<[^>]+>/g,'')}\n`);
               } else result = 'No news found.';
             } catch { result = 'News feed unavailable.'; }
             break;
           case 'qr':
             if (!args[0]) result = 'Usage: qr <text or url>';
-            else result = '📱 QR: https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(args.join(' '));
+            else result = `📱 QR: https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(args.join(' '))}`;
             break;
           case 'ip':
             {
               const res = await fetchWithTimeout('https://api.ipify.org?format=json');
               const data = await res.json();
-              result = '🌐 Your IP: ' + data.ip;
+              result = `🌐 Your IP: ${data.ip}`;
             }
             break;
           case 'fact':
             {
               const res = await fetchWithTimeout('https://uselessfacts.jsph.pl/random.json?language=en');
               const data = await res.json();
-              result = '💡 ' + data.text;
+              result = `💡 ${data.text}`;
             }
             break;
           case 'randomuser':
@@ -182,22 +184,22 @@ export default function SoloChat() {
               const res = await fetchWithTimeout('https://randomuser.me/api/');
               const data = await res.json();
               const u = data.results[0];
-              result = '👤 ' + u.name.first + ' ' + u.name.last + '\n   ' + u.email;
+              result = `👤 ${u.name.first} ${u.name.last}\n   ${u.email}`;
             }
             break;
           case 'timezone':
             if (!args[0]) result = 'Usage: timezone <area>/<city>';
             else {
-              const res = await fetchWithTimeout('https://worldtimeapi.org/api/timezone/' + encodeURIComponent(args[0]));
+              const res = await fetchWithTimeout(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(args[0])}`);
               if (!res.ok) throw new Error('Invalid timezone');
               const data = await res.json();
-              result = '🕒 ' + data.timezone + ': ' + data.datetime.split('T')[1].split('.')[0];
+              result = `🕒 ${data.timezone}: ${data.datetime.split('T')[1].split('.')[0]}`;
             }
             break;
         }
-        setHistory(prev => [...prev.slice(0,-1), { type: 'response', text: result }]);
+        setHistory(prev => [...prev.slice(0,-1), { type: 'response', text: formatResponse(result) }]);
       } catch (err) {
-        setHistory(prev => [...prev.slice(0,-1), { type: 'error', text: 'Error: ' + err.message }]);
+        setHistory(prev => [...prev.slice(0,-1), { type: 'error', text: formatResponse('Error: ' + err.message) }]);
       }
       setLoading(false);
       return;
@@ -208,14 +210,14 @@ export default function SoloChat() {
     let isError = false;
     switch (mainCmd) {
       case 'help':
-        response = '📋 Available Commands\n\n' +
-          '🔹 General:\n  help, clear, time, date, echo, whoami, version\n\n' +
-          '🔹 Internet:\n  weather <city>, define <word>, crypto <coin>, joke, news, qr <text>, ip\n' +
-          '🔹 Fun:\n  fact, randomuser, quote\n' +
-          '🔹 Math:\n  calc <expr>\n' +
-          '🔹 Time:\n  timezone <area/city>\n\n' +
-          '🔧 Aliases:\n  alias <short> <command> – set\n  unalias <short> – remove\n  aliases – list\n\n' +
-          '⌨️  Use Tab for autocomplete, ↑/↓ for history.';
+        response = `📋 Available Commands\n\n` +
+          `🔹 General:\n  help, clear, time, date, echo, whoami, version\n\n` +
+          `🔹 Internet:\n  weather <city>, define <word>, crypto <coin>, joke, news, qr <text>, ip\n` +
+          `🔹 Fun:\n  fact, randomuser, quote\n` +
+          `🔹 Math:\n  calc <expr>\n` +
+          `🔹 Time:\n  timezone <area/city>\n\n` +
+          `🔧 Aliases:\n  alias <short> <command> – set\n  unalias <short> – remove\n  aliases – list\n\n` +
+          `⌨️  Use Tab for autocomplete, ↑/↓ for history.`;
         break;
       case 'time':
         response = new Date().toLocaleTimeString();
@@ -227,7 +229,7 @@ export default function SoloChat() {
         response = args.join(' ');
         break;
       case 'whoami':
-        response = currentUser?.cpCode || 'guest@cp-terminal';
+        response = 'guest@cp-terminal';
         break;
       case 'version':
         response = 'CP Terminal v2.1 – Enhanced Edition';
@@ -253,7 +255,7 @@ export default function SoloChat() {
           const short = args[0];
           const full = args.slice(1).join(' ');
           setAliases(prev => ({ ...prev, [short]: full }));
-          response = 'Alias set: ' + short + ' → ' + full;
+          response = `Alias set: ${short} → ${full}`;
         }
         break;
       case 'unalias':
@@ -261,22 +263,22 @@ export default function SoloChat() {
         else {
           const short = args[0];
           setAliases(prev => { const n = {...prev}; delete n[short]; return n; });
-          response = 'Alias removed: ' + short;
+          response = `Alias removed: ${short}`;
         }
         break;
       case 'aliases':
         if (Object.keys(aliases).length === 0) response = 'No aliases set.';
-        else response = 'Aliases:\n' + Object.entries(aliases).map(([k,v]) => '  ' + k + ' → ' + v).join('\n');
+        else response = 'Aliases:\n' + Object.entries(aliases).map(([k,v]) => `  ${k} → ${v}`).join('\n');
         break;
       default:
-        response = 'Command not found: ' + mainCmd + '. Type "help".';
+        response = `Command not found: ${mainCmd}. Type "help".`;
         isError = true;
     }
 
-    const entry = { type: isError ? 'error' : 'response', text: response };
+    const entry = { type: isError ? 'error' : 'response', text: formatResponse(response) };
     setHistory([...newHistory, entry]);
     setInput('');
-  }, [history, aliases, currentUser, showClearConfirm]);
+  }, [history, aliases, showClearConfirm]);
 
   const confirmClear = (confirmed) => {
     if (confirmed) {
@@ -297,6 +299,10 @@ export default function SoloChat() {
       setSuggestions(matches);
       setSelectedSuggestion(0);
     }
+  };
+
+  const handleSend = () => {
+    if (input.trim()) executeCommand(input);
   };
 
   const handleKeyDown = (e) => {
@@ -334,19 +340,18 @@ export default function SoloChat() {
         setSelectedSuggestion(-1);
         return;
       }
-      executeCommand(input);
+      handleSend();
     }
   };
 
-  // Render output lines
+  // Render output lines with improved styling
   const outputElements = history.map((entry, idx) =>
     React.createElement('div', {
       key: idx,
-      className: 'terminal-line ' + entry.type,
+      className: `terminal-line ${entry.type}${entry.type === 'response' ? ' response-card' : ''}`,
     }, entry.text)
   );
 
-  // Clear confirmation dialog
   const clearConfirm = showClearConfirm ? React.createElement('div', { className: 'terminal-clear-confirm glass' },
     React.createElement('p', null, 'Clear the terminal? All output will be lost.'),
     React.createElement('div', { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
@@ -355,12 +360,11 @@ export default function SoloChat() {
     )
   ) : null;
 
-  // Suggestions dropdown
   const suggestionList = suggestions.length > 0 ? React.createElement('div', { className: 'terminal-suggestions glass' },
     suggestions.map((s, i) =>
       React.createElement('div', {
         key: s,
-        className: 'suggestion-item' + (i === selectedSuggestion ? ' selected' : ''),
+        className: `suggestion-item${i === selectedSuggestion ? ' selected' : ''}`,
         onClick: () => {
           setInput(s + ' ');
           setSuggestions([]);
@@ -370,12 +374,11 @@ export default function SoloChat() {
     )
   ) : null;
 
-  // Input line (displayed inline for cursor effect)
   const inputLine = React.createElement('div', {
     className: 'terminal-line command',
     style: { display: 'flex' }
   },
-    React.createElement('span', { className: 'terminal-prompt' }, (currentUser?.cpCode || 'guest') + ' ~ '),
+    React.createElement('span', { className: 'terminal-prompt' }, 'guest ~ '),
     React.createElement('span', null, input),
     loading && React.createElement('span', { className: 'blinking-cursor' })
   );
@@ -399,9 +402,9 @@ export default function SoloChat() {
       suggestionList
     ),
 
-    // Input area
+    // Input area with send button
     React.createElement('div', { className: 'terminal-input-area' },
-      React.createElement('span', { className: 'terminal-prompt' }, (currentUser?.cpCode || 'guest') + ' ~ '),
+      React.createElement('span', { className: 'terminal-prompt' }, 'guest ~ '),
       React.createElement('input', {
         ref: inputRef,
         type: 'text',
@@ -419,10 +422,16 @@ export default function SoloChat() {
         autoFocus: true,
         disabled: loading
       }),
-      loading && React.createElement('span', { className: 'spinner', style: { marginLeft: '8px' } })
+      loading && React.createElement('span', { className: 'spinner', style: { marginLeft: '8px' } }),
+      React.createElement('button', {
+        className: 'btn btn-primary send-btn',
+        onClick: handleSend,
+        disabled: loading || !input.trim(),
+        style: { marginLeft: '8px', padding: '10px 16px', borderRadius: '12px' }
+      }, React.createElement('i', { className: 'ph ph-paper-plane-right' }))
     ),
 
-    // CSS animations (inlined)
+    // CSS animations inlined
     React.createElement('style', null, `
       @keyframes blink {
         0%, 100% { opacity: 1; }
