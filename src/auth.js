@@ -8,6 +8,7 @@ import {
   sendEmailVerification,
   setPersistence,
   browserLocalPersistence,
+  browserSessionPersistence,
 } from 'firebase/auth';
 import { auth, googleProvider, githubProvider } from './config.js';
 
@@ -24,23 +25,18 @@ export default function Auth({ onLogin }) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0); // 0-4
+  const [passwordStrength, setPasswordStrength] = useState(0);
   const [rememberMe, setRememberMe] = useState(false);
   const [resendDisabled, setResendDisabled] = useState(false);
 
   const emailRef = useRef(null);
-  const passwordRef = useRef(null);
 
-  // Auto-focus on mode change
+  // Auto-focus on email when mode changes
   useEffect(() => {
-    if (mode === 'forgot') {
-      emailRef.current?.focus();
-    } else {
-      emailRef.current?.focus();
-    }
+    emailRef.current?.focus();
   }, [mode]);
 
-  // Password strength calculation
+  // Password strength calculator
   const calculateStrength = (pwd) => {
     let score = 0;
     if (pwd.length >= 6) score++;
@@ -60,12 +56,12 @@ export default function Auth({ onLogin }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
     setSuccess('');
   };
 
-  const togglePassword = () => setShowPassword((prev) => !prev);
+  const togglePassword = () => setShowPassword(prev => !prev);
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
@@ -75,23 +71,19 @@ export default function Auth({ onLogin }) {
     setVerificationSent(false);
 
     try {
-      // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
         throw new Error('Please enter a valid email address.');
       }
 
       if (mode === 'login') {
-        await setPersistence(auth, rememberMe ? browserLocalPersistence : 'session');
+        const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+        await setPersistence(auth, persistenceType);
         const userCred = await signInWithEmailAndPassword(auth, formData.email, formData.password);
         onLogin(userCred.user);
       } else if (mode === 'register') {
-        if (formData.password.length < 6) {
-          throw new Error('Password must be at least 6 characters.');
-        }
-        if (formData.password !== formData.confirmPassword) {
-          throw new Error('Passwords do not match.');
-        }
+        if (formData.password.length < 6) throw new Error('Password must be at least 6 characters.');
+        if (formData.password !== formData.confirmPassword) throw new Error('Passwords do not match.');
 
         const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         if (formData.displayName) {
@@ -99,19 +91,15 @@ export default function Auth({ onLogin }) {
         }
         await sendEmailVerification(userCred.user);
         setVerificationSent(true);
-        setSuccess('Account created! A verification email has been sent.');
-        // Optionally auto-login
+        setSuccess('Account created! Verification email sent.');
         onLogin(userCred.user);
       } else if (mode === 'forgot') {
-        if (!formData.email) {
-          throw new Error('Please enter your email address.');
-        }
+        if (!formData.email) throw new Error('Please enter your email address.');
         await sendPasswordResetEmail(auth, formData.email);
-        setSuccess('✅ Password reset email sent. Please check your inbox.');
-        setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+        setSuccess('Password reset email sent. Check your inbox.');
+        setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
       }
     } catch (err) {
-      // User-friendly error messages
       let msg = err.message.replace('Firebase: ', '');
       if (msg.includes('user-not-found')) msg = 'No account found with this email.';
       else if (msg.includes('wrong-password')) msg = 'Incorrect password.';
@@ -128,7 +116,7 @@ export default function Auth({ onLogin }) {
     setError('');
     try {
       const provider = providerType === 'google' ? googleProvider : githubProvider;
-      await setPersistence(auth, rememberMe ? browserLocalPersistence : 'session');
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       const result = await signInWithPopup(auth, provider);
       onLogin(result.user);
     } catch (err) {
@@ -141,261 +129,167 @@ export default function Auth({ onLogin }) {
   };
 
   const resendVerification = async () => {
-    if (resendDisabled) return;
+    if (resendDisabled || !auth.currentUser) return;
     setResendDisabled(true);
     try {
       await sendEmailVerification(auth.currentUser);
-      setSuccess('Verification email resent. Check your inbox.');
+      setSuccess('Verification email resent.');
     } catch {
-      setError('Could not resend verification. Try again later.');
+      setError('Could not resend verification.');
     }
     setTimeout(() => setResendDisabled(false), 60000);
   };
 
-  // ---- JSX ----
-  return (
-    <div className="container-center">
-      <div className="glass auth-card">
-        {/* Header */}
-        <div className="auth-header">
-          <h1>Connect Point</h1>
-          <p className="auth-subtitle">
-            {mode === 'login'
-              ? 'Welcome back'
-              : mode === 'register'
-              ? 'Create your account'
-              : 'Reset your password'}
-          </p>
-        </div>
+  // ---------- Helper render functions (all use React.createElement) ----------
 
-        {/* Status messages */}
-        {error && (
-          <div className="fade-in status-message error">
-            <i className="ph ph-x-circle"></i> {error}
-          </div>
-        )}
-        {success && (
-          <div className="fade-in status-message success">
-            <i className="ph ph-check-circle"></i> {success}
-          </div>
-        )}
-        {verificationSent && (
-          <div className="fade-in status-message success">
-            <i className="ph ph-envelope"></i> Verification email sent!{' '}
-            <button className="link-btn" onClick={resendVerification} disabled={resendDisabled}>
-              Resend
-            </button>
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleEmailAuth} className="auth-form">
-          {/* Display Name (register only) */}
-          {mode === 'register' && (
-            <div className="input-group">
-              <label htmlFor="displayName">Display Name</label>
-              <input
-                id="displayName"
-                className="input-field"
-                type="text"
-                name="displayName"
-                placeholder="John Doe"
-                value={formData.displayName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          )}
-
-          {/* Email */}
-          {mode !== 'forgot' ? (
-            <div className="input-group">
-              <label htmlFor="email">Email</label>
-              <input
-                ref={emailRef}
-                id="email"
-                className="input-field"
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          ) : (
-            <div className="input-group">
-              <label htmlFor="email-forgot">Email</label>
-              <input
-                ref={emailRef}
-                id="email-forgot"
-                className="input-field"
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          )}
-
-          {/* Password (if not forgot) */}
-          {mode !== 'forgot' && (
-            <>
-              <div className="input-group password-group">
-                <label htmlFor="password">Password</label>
-                <div className="password-wrapper">
-                  <input
-                    ref={passwordRef}
-                    id="password"
-                    className="input-field"
-                    type={showPassword ? 'text' : 'password'}
-                    name="password"
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={togglePassword}
-                    aria-label="Toggle password visibility"
-                  >
-                    <i className={`ph ${showPassword ? 'ph-eye-slash' : 'ph-eye'}`}></i>
-                  </button>
-                </div>
-              </div>
-
-              {/* Password strength (register) */}
-              {mode === 'register' && formData.password.length > 0 && (
-                <div className="password-strength">
-                  <div className="strength-bar">
-                    <div
-                      className={`strength-fill strength-${passwordStrength}`}
-                      style={{ width: `${(passwordStrength / 4) * 100}%` }}
-                    />
-                  </div>
-                  <span className="strength-label">
-                    {passwordStrength === 0 && 'Very weak'}
-                    {passwordStrength === 1 && 'Weak'}
-                    {passwordStrength === 2 && 'Fair'}
-                    {passwordStrength === 3 && 'Good'}
-                    {passwordStrength === 4 && 'Strong'}
-                  </span>
-                </div>
-              )}
-
-              {/* Confirm Password (register) */}
-              {mode === 'register' && (
-                <div className="input-group">
-                  <label htmlFor="confirmPassword">Confirm Password</label>
-                  <input
-                    id="confirmPassword"
-                    className="input-field"
-                    type={showPassword ? 'text' : 'password'}
-                    name="confirmPassword"
-                    placeholder="••••••••"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Remember me (login only) */}
-          {mode === 'login' && (
-            <div className="remember-me">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                />
-                Remember me
-              </label>
-            </div>
-          )}
-
-          {/* Submit button */}
-          <button
-            type="submit"
-            className="btn btn-primary btn-block"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <span className="spinner-small"></span>
-                {mode === 'login' ? 'Signing in...' : mode === 'register' ? 'Creating...' : 'Sending...'}
-              </>
-            ) : (
-              <>
-                {mode === 'login' && <i className="ph ph-sign-in"></i>}
-                {mode === 'register' && <i className="ph ph-user-plus"></i>}
-                {mode === 'forgot' && <i className="ph ph-arrow-right"></i>}
-                {mode === 'login' ? 'Sign In' : mode === 'register' ? 'Create Account' : 'Send Reset Link'}
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Social login (not in forgot mode) */}
-        {mode !== 'forgot' && (
-          <div className="social-section">
-            <div className="divider">
-              <span>or continue with</span>
-            </div>
-            <div className="social-buttons">
-              <button
-                className="btn btn-google"
-                onClick={() => handleSocialLogin('google')}
-                disabled={loading}
-              >
-                <i className="ph ph-google-logo"></i> Google
-              </button>
-              <button
-                className="btn btn-github"
-                onClick={() => handleSocialLogin('github')}
-                disabled={loading}
-              >
-                <i className="ph ph-github-logo"></i> GitHub
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Switch links */}
-        <div className="auth-switch">
-          {mode === 'login' ? (
-            <>
-              <a href="#forgot" onClick={(e) => { e.preventDefault(); setMode('forgot'); }}>
-                Forgot password?
-              </a>
-              <span className="sep">•</span>
-              <span>
-                Don't have an account?{' '}
-                <a href="#register" onClick={(e) => { e.preventDefault(); setMode('register'); }}>
-                  Sign up
-                </a>
-              </span>
-            </>
-          ) : mode === 'register' ? (
-            <span>
-              Already have an account?{' '}
-              <a href="#login" onClick={(e) => { e.preventDefault(); setMode('login'); }}>
-                Sign in
-              </a>
-            </span>
-          ) : (
-            <a href="#login" onClick={(e) => { e.preventDefault(); setMode('login'); }}>
-              ← Back to sign in
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
+  const header = React.createElement('div', { className: 'auth-header' },
+    React.createElement('h1', null, 'Connect Point'),
+    React.createElement('p', { className: 'auth-subtitle' },
+      mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create your account' : 'Reset your password')
   );
-          }
+
+  const errorMsg = error ? React.createElement('div', { className: 'fade-in status-message error' },
+    React.createElement('i', { className: 'ph ph-x-circle' }), ' ' + error
+  ) : null;
+
+  const successMsg = success && !verificationSent ? React.createElement('div', { className: 'fade-in status-message success' },
+    React.createElement('i', { className: 'ph ph-check-circle' }), ' ' + success
+  ) : null;
+
+  const verificationMsg = verificationSent ? React.createElement('div', { className: 'fade-in status-message success' },
+    React.createElement('i', { className: 'ph ph-envelope' }),
+    ' Verification email sent! ',
+    React.createElement('button', { className: 'link-btn', onClick: resendVerification, disabled: resendDisabled }, 'Resend')
+  ) : null;
+
+  // Form fields
+  const displayNameField = mode === 'register' ? React.createElement('div', { className: 'input-group' },
+    React.createElement('label', { htmlFor: 'displayName' }, 'Display Name'),
+    React.createElement('input', {
+      id: 'displayName', className: 'input-field', type: 'text',
+      name: 'displayName', placeholder: 'John Doe',
+      value: formData.displayName, onChange: handleChange, required: true
+    })
+  ) : null;
+
+  const emailField = React.createElement('div', { className: 'input-group' },
+    React.createElement('label', { htmlFor: 'email' }, 'Email'),
+    React.createElement('input', {
+      ref: emailRef, id: 'email', className: 'input-field', type: 'email',
+      name: 'email', placeholder: 'you@example.com',
+      value: formData.email, onChange: handleChange, required: true
+    })
+  );
+
+  const passwordField = mode !== 'forgot' ? React.createElement(React.Fragment, null,
+    React.createElement('div', { className: 'input-group password-group' },
+      React.createElement('label', { htmlFor: 'password' }, 'Password'),
+      React.createElement('div', { className: 'password-wrapper' },
+        React.createElement('input', {
+          id: 'password', className: 'input-field',
+          type: showPassword ? 'text' : 'password',
+          name: 'password', placeholder: '••••••••',
+          value: formData.password, onChange: handleChange, required: true
+        }),
+        React.createElement('button', {
+          type: 'button', className: 'password-toggle',
+          onClick: togglePassword, 'aria-label': 'Toggle password visibility'
+        }, React.createElement('i', { className: `ph ${showPassword ? 'ph-eye-slash' : 'ph-eye'}` }))
+      )
+    ),
+    // Strength bar (register only)
+    mode === 'register' && formData.password.length > 0 ? React.createElement('div', { className: 'password-strength' },
+      React.createElement('div', { className: 'strength-bar' },
+        React.createElement('div', {
+          className: `strength-fill strength-${passwordStrength}`,
+          style: { width: `${(passwordStrength / 4) * 100}%` }
+        })
+      ),
+      React.createElement('span', { className: 'strength-label' },
+        passwordStrength === 0 ? 'Very weak' :
+        passwordStrength === 1 ? 'Weak' :
+        passwordStrength === 2 ? 'Fair' :
+        passwordStrength === 3 ? 'Good' : 'Strong')
+    ) : null,
+    // Confirm password (register only)
+    mode === 'register' ? React.createElement('div', { className: 'input-group' },
+      React.createElement('label', { htmlFor: 'confirmPassword' }, 'Confirm Password'),
+      React.createElement('input', {
+        id: 'confirmPassword', className: 'input-field',
+        type: showPassword ? 'text' : 'password',
+        name: 'confirmPassword', placeholder: '••••••••',
+        value: formData.confirmPassword, onChange: handleChange, required: true
+      })
+    ) : null
+  ) : null;
+
+  const rememberMeCheck = mode === 'login' ? React.createElement('div', { className: 'remember-me' },
+    React.createElement('label', null,
+      React.createElement('input', {
+        type: 'checkbox', checked: rememberMe,
+        onChange: (e) => setRememberMe(e.target.checked)
+      }),
+      ' Remember me'
+    )
+  ) : null;
+
+  const submitBtnContent = loading ? React.createElement(React.Fragment, null,
+    React.createElement('span', { className: 'spinner-small' }),
+    mode === 'login' ? ' Signing in...' : mode === 'register' ? ' Creating...' : ' Sending...'
+  ) : React.createElement(React.Fragment, null,
+    mode === 'login' ? React.createElement('i', { className: 'ph ph-sign-in' }) :
+    mode === 'register' ? React.createElement('i', { className: 'ph ph-user-plus' }) :
+    React.createElement('i', { className: 'ph ph-arrow-right' }),
+    ' ' + (mode === 'login' ? 'Sign In' : mode === 'register' ? 'Create Account' : 'Send Reset Link')
+  );
+
+  const submitBtn = React.createElement('button', {
+    type: 'submit', className: 'btn btn-primary btn-block', disabled: loading
+  }, submitBtnContent);
+
+  const socialSection = mode !== 'forgot' ? React.createElement('div', { className: 'social-section' },
+    React.createElement('div', { className: 'divider' },
+      React.createElement('span', null, 'or continue with')
+    ),
+    React.createElement('div', { className: 'social-buttons' },
+      React.createElement('button', { className: 'btn btn-google', onClick: () => handleSocialLogin('google'), disabled: loading },
+        React.createElement('i', { className: 'ph ph-google-logo' }), ' Google'),
+      React.createElement('button', { className: 'btn btn-github', onClick: () => handleSocialLogin('github'), disabled: loading },
+        React.createElement('i', { className: 'ph ph-github-logo' }), ' GitHub')
+    )
+  ) : null;
+
+  const switchLinks = React.createElement('div', { className: 'auth-switch' },
+    mode === 'login' ? React.createElement(React.Fragment, null,
+      React.createElement('a', { href: '#', onClick: (e) => { e.preventDefault(); setMode('forgot'); } }, 'Forgot password?'),
+      React.createElement('span', { className: 'sep' }, ' • '),
+      React.createElement('span', null,
+        "Don't have an account? ",
+        React.createElement('a', { href: '#', onClick: (e) => { e.preventDefault(); setMode('register'); } }, 'Sign up')
+      )
+    ) : mode === 'register' ? React.createElement('span', null,
+      'Already have an account? ',
+      React.createElement('a', { href: '#', onClick: (e) => { e.preventDefault(); setMode('login'); } }, 'Sign in')
+    ) : React.createElement('a', { href: '#', onClick: (e) => { e.preventDefault(); setMode('login'); } }, '← Back to sign in')
+  );
+
+  const form = React.createElement('form', { onSubmit: handleEmailAuth, className: 'auth-form' },
+    displayNameField,
+    emailField,
+    passwordField,
+    rememberMeCheck,
+    submitBtn
+  );
+
+  return React.createElement('div', { className: 'container-center' },
+    React.createElement('div', { className: 'glass auth-card' },
+      header,
+      errorMsg,
+      successMsg,
+      verificationMsg,
+      form,
+      socialSection,
+      switchLinks
+    )
+  );
+      }
