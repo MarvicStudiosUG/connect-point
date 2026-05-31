@@ -5,7 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './config.js';
 import { ThemeProvider, useTheme } from './theme.js';
 import { UserProvider } from './UserContext.js';
-import { createUserProfile } from './db.js';
+import { createUserProfile, setUserOnline } from './db.js';
 import Auth from './auth.js';
 import SoloChat from './SoloChat.js';
 import DuoChat from './DuoChat.js';
@@ -22,8 +22,8 @@ const TABS = [
 function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('solo');
-  const [error, setError] = useState(null); // <-- NEW
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -33,13 +33,19 @@ function App() {
           const profile = await createUserProfile(firebaseUser);
           setUserProfile(profile);
           setError(null);
+          // Set online presence
+          setUserOnline(firebaseUser.uid, true);
+          // Set up presence on disconnect (when tab closes)
+          window.addEventListener('beforeunload', () => setUserOnline(firebaseUser.uid, false));
         } catch (err) {
           console.error('Profile creation error:', err);
           setError('Failed to create profile: ' + err.message);
-          // Sign out so they can retry
           await auth.signOut();
         }
       } else {
+        if (userProfile) {
+          setUserOnline(userProfile.uid, false);
+        }
         setUserProfile(null);
         setError(null);
       }
@@ -49,8 +55,10 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
+    if (userProfile) {
+      await setUserOnline(userProfile.uid, false);
+    }
     await auth.signOut();
-    setUserProfile(null);
   };
 
   const renderScreen = () => {
