@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
   addDoc, serverTimestamp, where
@@ -30,53 +30,61 @@ export default function DuoChat() {
   const [friendPresence, setFriendPresence] = useState(null);
   const [friendRequests, setFriendRequests] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [friends, setFriends] = useState([]); // <-- friends list always available
+  const [friends, setFriends] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Listen for friend requests
+  // Friend requests listener (only when UID is known)
   useEffect(() => {
+    if (!currentUser?.uid) return;
     const unsub = listenFriendRequests(currentUser.uid, setFriendRequests);
     return () => unsub();
-  }, [currentUser.uid]);
+  }, [currentUser?.uid]);
 
-  // Listen for friends (chats where currentUser is participant)
+  // Friends list (chats where current user is a participant)
   useEffect(() => {
-    const q = query(collection(db, 'chats'), where('participants', 'array-contains', currentUser.uid));
+    if (!currentUser?.uid) return;
+    const q = query(
+      collection(db, 'chats'),
+      where('participants', 'array-contains', currentUser.uid)
+    );
     const unsub = onSnapshot(q, (snapshot) => {
       const friendList = [];
       snapshot.forEach((d) => {
         const data = d.data();
         const friendId = data.participants.find((id) => id !== currentUser.uid);
-        friendList.push({ chatId: d.id, friendId });
+        if (friendId) friendList.push({ chatId: d.id, friendId });
       });
       setFriends(friendList);
     });
     return () => unsub();
-  }, [currentUser.uid]);
+  }, [currentUser?.uid]);
 
-  // Typing listener for current chat
+  // Typing listener for the active chat
   useEffect(() => {
     if (!chatId) return;
     const unsub = listenChatTyping(chatId, setTypingUsers);
     return () => unsub();
   }, [chatId]);
 
-  // Friend presence when chat is open
+  // Friend's online presence when chat is open
   useEffect(() => {
     if (!chatId || !foundUser) return;
     const unsub = listenUserPresence(foundUser.uid, setFriendPresence);
     return () => unsub();
   }, [chatId, foundUser]);
 
-  // Messages listener for current chat
+  // Messages listener for active chat
   useEffect(() => {
     if (!chatId) return;
-    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
+    const q = query(
+      collection(db, 'chats', chatId, 'messages'),
+      orderBy('timestamp', 'asc')
+    );
     const unsub = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setMessages(msgs);
@@ -84,7 +92,6 @@ export default function DuoChat() {
     return () => unsub();
   }, [chatId]);
 
-  // Search handler
   const handleSearch = async () => {
     const code = searchInput.trim().toUpperCase();
     if (!code.startsWith('CP-') || code.length !== 15) {
@@ -160,7 +167,27 @@ export default function DuoChat() {
     if (chatId) setChatTyping(chatId, currentUser.uid, isTyping);
   };
 
-  // ---------- View renderers (pure functions, no hooks) ----------
+  // ---------- Sub-components (pure, no hooks issues now) ----------
+  const FriendCard = ({ friendId }) => {
+    const [friendProfile, setFriendProfile] = useState(null);
+    useEffect(() => {
+      getUserProfile(friendId).then(setFriendProfile);
+    }, [friendId]);
+
+    if (!friendProfile) return null;
+    return React.createElement('div', {
+      className: 'room-card glass',
+      onClick: () => openChat(friendId)
+    },
+      React.createElement('div', { className: 'room-card-header' },
+        React.createElement('span', null, friendProfile.displayName || friendProfile.email),
+        friendProfile.online && React.createElement('span', { className: 'online-dot' })
+      ),
+      React.createElement('div', { className: 'room-code' }, friendProfile.cpCode)
+    );
+  };
+
+  // ---------- Views ----------
   const renderMainView = () =>
     React.createElement('div', { className: 'duo-container' },
       React.createElement('div', { className: 'glass', style: { padding: '1.5rem' } },
@@ -176,27 +203,11 @@ export default function DuoChat() {
           ? React.createElement('p', { className: 'text-secondary' }, 'No friends yet. Search by CP code to add.')
           : React.createElement('div', { className: 'rooms-grid' },
               friends.map((f) =>
-                React.createElement(FriendCard, { key: f.chatId, friendId: f.friendId, onClick: () => openChat(f.friendId) })
+                React.createElement(FriendCard, { key: f.chatId, friendId: f.friendId })
               )
             )
       )
     );
-
-  // FriendCard component (defined inside but fine because it's a separate component function)
-  const FriendCard = ({ friendId, onClick }) => {
-    const [friendProfile, setFriendProfile] = useState(null);
-    useEffect(() => {
-      getUserProfile(friendId).then(setFriendProfile);
-    }, [friendId]);
-    if (!friendProfile) return null;
-    return React.createElement('div', { className: 'room-card glass', onClick },
-      React.createElement('div', { className: 'room-card-header' },
-        React.createElement('span', null, friendProfile.displayName || friendProfile.email),
-        friendProfile.online && React.createElement('span', { className: 'online-dot' })
-      ),
-      React.createElement('div', { className: 'room-code' }, friendProfile.cpCode)
-    );
-  };
 
   const renderSearchView = () =>
     React.createElement('div', { className: 'duo-container' },
@@ -279,11 +290,10 @@ export default function DuoChat() {
     );
   };
 
-  // Route views
   switch (view) {
     case 'search': return renderSearchView();
     case 'requests': return renderRequestsView();
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-                            }
+      }
