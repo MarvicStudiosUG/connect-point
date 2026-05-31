@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
 import { auth } from './config.js';
 import { ThemeProvider, useTheme } from './theme.js';
 import { UserProvider } from './UserContext.js';
@@ -25,6 +25,7 @@ function App() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('solo');
   const { theme, toggleTheme } = useTheme();
+  const [verificationSent, setVerificationSent] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -33,9 +34,7 @@ function App() {
           const profile = await createUserProfile(firebaseUser);
           setUserProfile(profile);
           setError(null);
-          // Set online presence
           setUserOnline(firebaseUser.uid, true);
-          // Set up presence on disconnect (when tab closes)
           window.addEventListener('beforeunload', () => setUserOnline(firebaseUser.uid, false));
         } catch (err) {
           console.error('Profile creation error:', err);
@@ -43,9 +42,7 @@ function App() {
           await auth.signOut();
         }
       } else {
-        if (userProfile) {
-          setUserOnline(userProfile.uid, false);
-        }
+        if (userProfile) setUserOnline(userProfile.uid, false);
         setUserProfile(null);
         setError(null);
       }
@@ -55,10 +52,16 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
-    if (userProfile) {
-      await setUserOnline(userProfile.uid, false);
-    }
+    if (userProfile) await setUserOnline(userProfile.uid, false);
     await auth.signOut();
+  };
+
+  const resendVerification = async () => {
+    const user = auth.currentUser;
+    if (user) {
+      await sendEmailVerification(user);
+      setVerificationSent(true);
+    }
   };
 
   const renderScreen = () => {
@@ -91,6 +94,22 @@ function App() {
 
   if (!userProfile) {
     return React.createElement(Auth, { onLogin: () => {} });
+  }
+
+  // Check email verification
+  const currentUser = auth.currentUser;
+  if (currentUser && !currentUser.emailVerified) {
+    return React.createElement('div', { className: 'container-center' },
+      React.createElement('div', { className: 'glass', style: { padding: '2rem', textAlign: 'center', maxWidth: '400px' } },
+        React.createElement('h2', null, 'Verify Your Email'),
+        React.createElement('p', { style: { marginBottom: '1rem', color: 'var(--text-secondary)' } },
+          'We sent a verification link to ' + currentUser.email + '. Please check your inbox and spam folder.'),
+        verificationSent && React.createElement('p', { style: { color: 'var(--success)', marginBottom: '1rem' } }, 'Verification email resent!'),
+        React.createElement('button', { className: 'btn btn-primary', onClick: resendVerification, style: { marginBottom: '12px', width: '100%' } },
+          'Resend Verification Email'),
+        React.createElement('button', { className: 'btn', onClick: handleLogout, style: { width: '100%' } }, 'Sign Out')
+      )
+    );
   }
 
   return React.createElement(
