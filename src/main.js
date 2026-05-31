@@ -23,15 +23,25 @@ function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('solo');
+  const [error, setError] = useState(null); // <-- NEW
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const profile = await createUserProfile(firebaseUser);
-        setUserProfile(profile);
+        try {
+          const profile = await createUserProfile(firebaseUser);
+          setUserProfile(profile);
+          setError(null);
+        } catch (err) {
+          console.error('Profile creation error:', err);
+          setError('Failed to create profile: ' + err.message);
+          // Sign out so they can retry
+          await auth.signOut();
+        }
       } else {
         setUserProfile(null);
+        setError(null);
       }
       setLoading(false);
     });
@@ -57,6 +67,16 @@ function App() {
     return React.createElement('div', { className: 'container-center' },
       React.createElement('div', { className: 'glass', style: { padding: '2rem', textAlign: 'center' } },
         React.createElement('p', null, 'Loading Connect Point...')
+      )
+    );
+  }
+
+  if (error) {
+    return React.createElement('div', { className: 'container-center' },
+      React.createElement('div', { className: 'glass', style: { padding: '2rem', textAlign: 'center', maxWidth: '400px' } },
+        React.createElement('h2', { style: { color: 'var(--danger)' } }, 'Sign‑in Error'),
+        React.createElement('p', { style: { marginBottom: '1rem' } }, error),
+        React.createElement('button', { className: 'btn btn-primary', onClick: () => { setError(null); window.location.reload(); } }, 'Try Again')
       )
     );
   }
