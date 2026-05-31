@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cp-cache-v1';
+const CACHE_NAME = 'cp-cache-v2';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -14,6 +14,14 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((response) => response || fetch(event.request))
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request).then((networkResponse) => {
+        if (networkResponse.ok) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+        }
+        return networkResponse;
+      });
+    })
   );
 });
