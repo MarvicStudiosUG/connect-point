@@ -1167,3 +1167,72 @@ export default function SoloChat() {
     `)
   );
     }
+/* Reply preview in chat bubble */
+.reply-preview {
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+/* Reply bar above input */
+.reply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.reply-bar span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Message actions (reply, delete, reactions) */
+.message-actions {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+  justify-content: flex-end;
+}
+.message-actions .btn-icon {
+  font-size: 0.9rem;
+  padding: 2px;
+}
+
+/* Reactions bar */
+.reactions-bar {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.reaction-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 0.8rem;
+  cursor: default;
+}
+.reaction-icon {
+  font-size: 0.9rem;
+}
+
+/* Room card relative for unfriend button */
+.room-card {
+  position: relative;
+}
+
+/* Send button in terminal */
+.send-btn {
+  flex-shrink: 0;
+                                                                       }
