@@ -1,28 +1,45 @@
-import React from 'react';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 export default function SoloChat() {
-  const [history, setHistory] = useState([
-    { type: 'response', text: 'Welcome to CP Terminal. Type "help" to see available commands.' }
-  ]);
+  const [history, setHistory] = useState(() => {
+    const saved = localStorage.getItem('cp-terminal-history');
+    return saved ? JSON.parse(saved) : [{ type: 'response', text: 'Welcome to CP Terminal. Type "help".' }];
+  });
   const [input, setInput] = useState('');
-  const [commandHistory, setCommandHistory] = useState([]);
+  const [commandHistory, setCommandHistory] = useState(() => {
+    const saved = localStorage.getItem('cp-command-history');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
+  const [aliases, setAliases] = useState(() => {
+    const saved = localStorage.getItem('cp-aliases');
+    return saved ? JSON.parse(saved) : {};
+  });
   const outputRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
+    if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
   }, [history]);
+
+  useEffect(() => {
+    localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-50)));
+  }, [history]);
+
+  useEffect(() => {
+    localStorage.setItem('cp-command-history', JSON.stringify(commandHistory.slice(-50)));
+  }, [commandHistory]);
+
+  useEffect(() => {
+    localStorage.setItem('cp-aliases', JSON.stringify(aliases));
+  }, [aliases]);
 
   const focusInput = () => {
     if (inputRef.current) inputRef.current.focus();
   };
 
-  const cloudCommands = ['weather', 'define', 'crypto', 'joke', 'news', 'qr', 'ip'];
+  const cloudCommands = ['weather', 'define', 'crypto', 'joke', 'news', 'qr', 'ip', 'fact', 'randomuser', 'timezone'];
 
   const fetchWithTimeout = (url, timeout = 5000) => {
     return Promise.race([
@@ -40,9 +57,17 @@ export default function SoloChat() {
     setHistoryIndex(-1);
 
     const parts = trimmedCmd.split(/\s+/);
-    const mainCmd = parts[0].toLowerCase();
+    let mainCmd = parts[0].toLowerCase();
+    // Alias resolution
+    if (aliases[mainCmd]) {
+      const aliasExpansion = aliases[mainCmd];
+      const aliasParts = aliasExpansion.split(/\s+/);
+      mainCmd = aliasParts[0].toLowerCase();
+      parts.splice(0, 1, ...aliasParts);
+    }
     const args = parts.slice(1);
 
+    // Cloud commands
     if (cloudCommands.includes(mainCmd)) {
       setLoading(true);
       setHistory([...newHistory, { type: 'response', text: '⏳ Fetching...' }]);
@@ -123,6 +148,30 @@ export default function SoloChat() {
               result = `🌐 Your public IP: ${data.ip}`;
             }
             break;
+          case 'fact':
+            {
+              const res = await fetchWithTimeout('https://uselessfacts.jsph.pl/random.json?language=en');
+              const data = await res.json();
+              result = `💡 ${data.text}`;
+            }
+            break;
+          case 'randomuser':
+            {
+              const res = await fetchWithTimeout('https://randomuser.me/api/');
+              const data = await res.json();
+              const u = data.results[0];
+              result = `👤 ${u.name.first} ${u.name.last}, ${u.email}`;
+            }
+            break;
+          case 'timezone':
+            if (!args[0]) result = 'Usage: timezone <area>/<city> (e.g., Europe/London)';
+            else {
+              const res = await fetchWithTimeout(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(args[0])}`);
+              if (!res.ok) throw new Error('Invalid timezone');
+              const data = await res.json();
+              result = `🕒 ${data.timezone}: ${data.datetime.split('T')[1].split('.')[0]}`;
+            }
+            break;
           default:
             result = `Command not implemented: ${mainCmd}`;
         }
@@ -137,10 +186,18 @@ export default function SoloChat() {
     // Local commands
     let response = '';
     let isError = false;
-
     switch (mainCmd) {
       case 'help':
-        response = 'Available commands:\n  help, clear, time, date, echo, whoami, version, calc, weather, define, crypto, joke, news, qr, ip, quote';
+        response = `Available commands:
+  help, clear, time, date, echo, whoami, version, calc
+  weather <city> - Live weather
+  define <word> - Dictionary definition
+  crypto <coin> - Crypto price
+  joke, news, qr <text>, ip, fact, randomuser
+  timezone <area/city>
+  alias <short> <command> - Set alias
+  unalias <short> - Remove alias
+  aliases - List aliases`;
         break;
       case 'clear':
         setHistory([]);
@@ -176,6 +233,34 @@ export default function SoloChat() {
       case 'quote':
         response = '"The only way to do great work is to love what you do." – Steve Jobs';
         break;
+      case 'alias':
+        if (args.length < 2) {
+          response = 'Usage: alias <short> <command>';
+        } else {
+          const short = args[0];
+          const fullCmd = args.slice(1).join(' ');
+          setAliases(prev => ({ ...prev, [short]: fullCmd }));
+          response = `Alias set: ${short} -> ${fullCmd}`;
+        }
+        break;
+      case 'unalias':
+        if (!args[0]) response = 'Usage: unalias <short>';
+        else {
+          const short = args[0];
+          setAliases(prev => {
+            const newAliases = { ...prev };
+            delete newAliases[short];
+            return newAliases;
+          });
+          response = `Alias removed: ${short}`;
+        }
+        break;
+      case 'aliases':
+        if (Object.keys(aliases).length === 0) response = 'No aliases set.';
+        else {
+          response = 'Aliases:\n' + Object.entries(aliases).map(([k, v]) => `  ${k} -> ${v}`).join('\n');
+        }
+        break;
       default:
         response = `Command not found: ${mainCmd}. Type "help".`;
         isError = true;
@@ -183,7 +268,7 @@ export default function SoloChat() {
 
     setHistory([...newHistory, { type: isError ? 'error' : 'response', text: response }]);
     setInput('');
-  }, [history]);
+  }, [history, aliases]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -210,12 +295,10 @@ export default function SoloChat() {
     }
   };
 
-  // Build the output lines array
   const outputLines = history.map((entry, idx) =>
     React.createElement('div', { key: idx, className: `terminal-line ${entry.type}` }, entry.text)
   );
 
-  // Current input line with blinking cursor
   const inputLine = React.createElement('div', { className: 'terminal-line command', style: { display: 'flex' } },
     React.createElement('span', { className: 'terminal-prompt' }, '$'),
     React.createElement('span', null, input),
@@ -257,4 +340,4 @@ export default function SoloChat() {
       }
     `)
   );
-}
+                }
