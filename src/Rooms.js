@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
-  addDoc, serverTimestamp, doc, getDoc
+  addDoc, serverTimestamp, doc
 } from 'firebase/firestore';
-import { db, createRoom, joinRoomByCode, getUserRooms, getPublicRooms, searchRoomsByName, updateRoom, removeMember, deleteRoom } from './db.js';
+import { db, createRoom, joinRoomByCode, getUserRooms, getPublicRooms, updateRoom, removeMember, deleteRoom } from './db.js';
 import { useUser } from './UserContext.js';
 
 export default function Rooms() {
@@ -16,19 +16,15 @@ export default function Rooms() {
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef(null);
 
-  // For create form
   const [createForm, setCreateForm] = useState({ name: '', description: '', isPublic: true, password: '' });
   const [createError, setCreateError] = useState('');
 
-  // For join form
   const [joinCode, setJoinCode] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
   const [joinError, setJoinError] = useState('');
 
-  // Admin panel
   const [showAdmin, setShowAdmin] = useState(false);
 
-  // Fetch user's rooms and public rooms
   useEffect(() => {
     if (!currentUser) return;
     loadRooms();
@@ -39,13 +35,12 @@ export default function Rooms() {
       const userRooms = await getUserRooms(currentUser.uid);
       setRooms(userRooms);
       const pub = await getPublicRooms();
-      setPublicRooms(pub.filter(r => !userRooms.some(ur => ur.id === r.id))); // exclude already joined
+      setPublicRooms(pub.filter(r => !userRooms.some(ur => ur.id === r.id)));
     } catch (err) {
       console.error(err);
     }
   };
 
-  // Real‑time messages for selected room
   useEffect(() => {
     if (!selectedRoom) return;
     const q = query(collection(db, 'rooms', selectedRoom.id, 'messages'), orderBy('timestamp', 'asc'));
@@ -89,11 +84,7 @@ export default function Rooms() {
     }
     try {
       const room = await joinRoomByCode(code, joinPassword);
-      setRooms(prev => {
-        const exists = prev.find(r => r.id === room.id);
-        if (exists) return prev;
-        return [room, ...prev];
-      });
+      setRooms(prev => { const exists = prev.find(r => r.id === room.id); return exists ? prev : [room, ...prev]; });
       setView('list');
       setJoinCode('');
       setJoinPassword('');
@@ -149,187 +140,159 @@ export default function Rooms() {
     }
   };
 
-  // RENDER FUNCTIONS
-  const renderList = () => (
-    <div className="rooms-container">
-      <div className="rooms-header">
-        <h2>Rooms</h2>
-        <div className="rooms-header-actions">
-          <button className="btn btn-primary" onClick={() => setView('create')}>
-            <i className="ph ph-plus"></i> Create
-          </button>
-          <button className="btn" onClick={() => setView('join')}>
-            <i className="ph ph-sign-in"></i> Join
-          </button>
-        </div>
-      </div>
-
-      <h3 className="rooms-section-title">Your Rooms</h3>
-      {rooms.length === 0 ? (
-        <p className="text-secondary">You haven't joined any rooms yet.</p>
-      ) : (
-        <div className="rooms-grid">
-          {rooms.map(room => (
-            <div key={room.id} className="room-card glass" onClick={() => enterRoom(room)}>
-              <div className="room-card-header">
-                <span className="room-name">{room.name}</span>
-                {!room.isPublic && <i className="ph ph-lock" style={{ color: 'var(--accent)' }}></i>}
-              </div>
-              <div className="room-code">{room.roomCode}</div>
-              <div className="room-meta">
-                <span>{room.members.length} member{room.members.length > 1 ? 's' : ''}</span>
-                {room.adminUID === currentUser.uid && <span className="badge-admin">Admin</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <h3 className="rooms-section-title">Public Rooms</h3>
-      {publicRooms.length === 0 ? (
-        <p className="text-secondary">No public rooms available.</p>
-      ) : (
-        <div className="rooms-grid">
-          {publicRooms.map(room => (
-            <div key={room.id} className="room-card glass" onClick={() => enterRoom(room)}>
-              <div className="room-card-header">
-                <span className="room-name">{room.name}</span>
-                <i className="ph ph-globe" style={{ color: 'var(--text-secondary)' }}></i>
-              </div>
-              <div className="room-code">{room.roomCode}</div>
-              <div className="room-meta">{room.members.length} member{room.members.length > 1 ? 's' : ''}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+  // ---------- RENDER HELPERS ----------
+  const renderList = () => React.createElement('div', { className: 'rooms-container' },
+    React.createElement('div', { className: 'rooms-header' },
+      React.createElement('h2', null, 'Rooms'),
+      React.createElement('div', { className: 'rooms-header-actions' },
+        React.createElement('button', { className: 'btn btn-primary', onClick: () => setView('create') },
+          React.createElement('i', { className: 'ph ph-plus' }), ' Create'),
+        React.createElement('button', { className: 'btn', onClick: () => setView('join') },
+          React.createElement('i', { className: 'ph ph-sign-in' }), ' Join')
+      )
+    ),
+    React.createElement('h3', { className: 'rooms-section-title' }, 'Your Rooms'),
+    rooms.length === 0 ? React.createElement('p', { className: 'text-secondary' }, "You haven't joined any rooms yet.") :
+    React.createElement('div', { className: 'rooms-grid' },
+      rooms.map(room => React.createElement('div', { key: room.id, className: 'room-card glass', onClick: () => enterRoom(room) },
+        React.createElement('div', { className: 'room-card-header' },
+          React.createElement('span', { className: 'room-name' }, room.name),
+          !room.isPublic && React.createElement('i', { className: 'ph ph-lock', style: { color: 'var(--accent)' } })
+        ),
+        React.createElement('div', { className: 'room-code' }, room.roomCode),
+        React.createElement('div', { className: 'room-meta' },
+          React.createElement('span', null, `${room.members.length} member${room.members.length > 1 ? 's' : ''}`),
+          room.adminUID === currentUser.uid && React.createElement('span', { className: 'badge-admin' }, 'Admin')
+        )
+      ))
+    ),
+    React.createElement('h3', { className: 'rooms-section-title' }, 'Public Rooms'),
+    publicRooms.length === 0 ? React.createElement('p', { className: 'text-secondary' }, 'No public rooms available.') :
+    React.createElement('div', { className: 'rooms-grid' },
+      publicRooms.map(room => React.createElement('div', { key: room.id, className: 'room-card glass', onClick: () => enterRoom(room) },
+        React.createElement('div', { className: 'room-card-header' },
+          React.createElement('span', { className: 'room-name' }, room.name),
+          React.createElement('i', { className: 'ph ph-globe', style: { color: 'var(--text-secondary)' } })
+        ),
+        React.createElement('div', { className: 'room-code' }, room.roomCode),
+        React.createElement('div', { className: 'room-meta' }, `${room.members.length} member${room.members.length > 1 ? 's' : ''}`)
+      ))
+    )
   );
 
-  const renderCreate = () => (
-    <div className="rooms-container">
-      <div className="glass" style={{ padding: '1.5rem' }}>
-        <button className="btn-icon" onClick={() => setView('list')}><i className="ph ph-arrow-left"></i></button>
-        <h2 style={{ marginTop: '1rem' }}>Create Room</h2>
-        <form onSubmit={handleCreate}>
-          <div className="input-group">
-            <label>Room Name</label>
-            <input className="input-field" type="text" value={createForm.name} onChange={e => setCreateForm({...createForm, name: e.target.value})} required />
-          </div>
-          <div className="input-group">
-            <label>Description (optional)</label>
-            <input className="input-field" type="text" value={createForm.description} onChange={e => setCreateForm({...createForm, description: e.target.value})} />
-          </div>
-          <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
-            <label>Public</label>
-            <input type="checkbox" checked={createForm.isPublic} onChange={e => setCreateForm({...createForm, isPublic: e.target.checked})} />
-          </div>
-          {!createForm.isPublic && (
-            <div className="input-group">
-              <label>Password</label>
-              <input className="input-field" type="password" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} />
-            </div>
-          )}
-          {createError && <div className="error-msg">{createError}</div>}
-          <button className="btn btn-primary" type="submit" style={{ width: '100%' }}>Create Room</button>
-        </form>
-      </div>
-    </div>
+  const renderCreate = () => React.createElement('div', { className: 'rooms-container' },
+    React.createElement('div', { className: 'glass', style: { padding: '1.5rem' } },
+      React.createElement('button', { className: 'btn-icon', onClick: () => setView('list') },
+        React.createElement('i', { className: 'ph ph-arrow-left' })),
+      React.createElement('h2', { style: { marginTop: '1rem' } }, 'Create Room'),
+      React.createElement('form', { onSubmit: handleCreate },
+        React.createElement('div', { className: 'input-group' },
+          React.createElement('label', null, 'Room Name'),
+          React.createElement('input', { className: 'input-field', type: 'text', value: createForm.name, onChange: e => setCreateForm({...createForm, name: e.target.value}), required: true })
+        ),
+        React.createElement('div', { className: 'input-group' },
+          React.createElement('label', null, 'Description (optional)'),
+          React.createElement('input', { className: 'input-field', type: 'text', value: createForm.description, onChange: e => setCreateForm({...createForm, description: e.target.value}) })
+        ),
+        React.createElement('div', { className: 'input-group', style: { flexDirection: 'row', alignItems: 'center', gap: '12px' } },
+          React.createElement('label', null, 'Public'),
+          React.createElement('input', { type: 'checkbox', checked: createForm.isPublic, onChange: e => setCreateForm({...createForm, isPublic: e.target.checked}) })
+        ),
+        !createForm.isPublic && React.createElement('div', { className: 'input-group' },
+          React.createElement('label', null, 'Password'),
+          React.createElement('input', { className: 'input-field', type: 'password', value: createForm.password, onChange: e => setCreateForm({...createForm, password: e.target.value}) })
+        ),
+        createError && React.createElement('div', { className: 'error-msg' }, createError),
+        React.createElement('button', { className: 'btn btn-primary', type: 'submit', style: { width: '100%' } }, 'Create Room')
+      )
+    )
   );
 
-  const renderJoin = () => (
-    <div className="rooms-container">
-      <div className="glass" style={{ padding: '1.5rem' }}>
-        <button className="btn-icon" onClick={() => setView('list')}><i className="ph ph-arrow-left"></i></button>
-        <h2 style={{ marginTop: '1rem' }}>Join Room</h2>
-        <form onSubmit={handleJoin}>
-          <div className="input-group">
-            <label>Room Code</label>
-            <input className="input-field" type="text" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="RC-XXXXX" />
-          </div>
-          <div className="input-group">
-            <label>Password (if private)</label>
-            <input className="input-field" type="password" value={joinPassword} onChange={e => setJoinPassword(e.target.value)} />
-          </div>
-          {joinError && <div className="error-msg">{joinError}</div>}
-          <button className="btn btn-primary" type="submit" style={{ width: '100%' }}>Join Room</button>
-        </form>
-      </div>
-    </div>
+  const renderJoin = () => React.createElement('div', { className: 'rooms-container' },
+    React.createElement('div', { className: 'glass', style: { padding: '1.5rem' } },
+      React.createElement('button', { className: 'btn-icon', onClick: () => setView('list') },
+        React.createElement('i', { className: 'ph ph-arrow-left' })),
+      React.createElement('h2', { style: { marginTop: '1rem' } }, 'Join Room'),
+      React.createElement('form', { onSubmit: handleJoin },
+        React.createElement('div', { className: 'input-group' },
+          React.createElement('label', null, 'Room Code'),
+          React.createElement('input', { className: 'input-field', type: 'text', value: joinCode, onChange: e => setJoinCode(e.target.value.toUpperCase()), placeholder: 'RC-XXXXX' })
+        ),
+        React.createElement('div', { className: 'input-group' },
+          React.createElement('label', null, 'Password (if private)'),
+          React.createElement('input', { className: 'input-field', type: 'password', value: joinPassword, onChange: e => setJoinPassword(e.target.value) })
+        ),
+        joinError && React.createElement('div', { className: 'error-msg' }, joinError),
+        React.createElement('button', { className: 'btn btn-primary', type: 'submit', style: { width: '100%' } }, 'Join Room')
+      )
+    )
   );
 
   const renderChat = () => {
     if (!selectedRoom) return null;
     const isAdmin = selectedRoom.adminUID === currentUser.uid;
 
-    return (
-      <div className="duo-container chat-active">
-        {/* Chat header with admin toggle */}
-        <div className="chat-header">
-          <button className="btn-icon" onClick={() => { setView('list'); setSelectedRoom(null); }}>
-            <i className="ph ph-arrow-left"></i>
-          </button>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <strong>{selectedRoom.name}</strong>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{selectedRoom.roomCode}</div>
-          </div>
-          <button className="btn-icon" onClick={() => setShowAdmin(!showAdmin)}>
-            <i className={`ph ph-dots-three-vertical`}></i>
-          </button>
-        </div>
+    const adminPanel = showAdmin && isAdmin ? React.createElement('div', { className: 'admin-panel glass' },
+      React.createElement('h4', null, 'Admin Controls'),
+      React.createElement('div', { className: 'input-group' },
+        React.createElement('label', null, 'Rename Room'),
+        React.createElement('div', { style: { display: 'flex', gap: '8px' } },
+          React.createElement('input', { className: 'input-field', id: 'newName', type: 'text', defaultValue: selectedRoom.name, style: { flex: 1 } }),
+          React.createElement('button', { className: 'btn btn-primary', onClick: () => handleAdminAction('updateName', document.getElementById('newName').value) }, 'Save')
+        )
+      ),
+      React.createElement('button', { className: 'btn', onClick: () => handleAdminAction('togglePublic') },
+        selectedRoom.isPublic ? 'Make Private' : 'Make Public'),
+      React.createElement('div', { className: 'admin-members' },
+        React.createElement('strong', null, `Members (${selectedRoom.members.length})`),
+        React.createElement('ul', null,
+          selectedRoom.members.map(mid => React.createElement('li', { key: mid, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+            React.createElement('span', null, mid === currentUser.uid ? 'You' : mid),
+            mid !== currentUser.uid && React.createElement('button', { className: 'btn-icon', onClick: () => handleAdminAction('removeMember', mid) },
+              React.createElement('i', { className: 'ph ph-x', style: { color: 'var(--danger)' } })
+            )
+          ))
+        )
+      ),
+      React.createElement('button', { className: 'btn', onClick: () => handleAdminAction('delete'), style: { background: 'var(--danger)', color: 'white', marginTop: '12px' } }, 'Delete Room')
+    ) : null;
 
-        {/* Admin panel (dropdown) */}
-        {showAdmin && isAdmin && (
-          <div className="admin-panel glass">
-            <h4>Admin Controls</h4>
-            <div className="input-group">
-              <label>Rename Room</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input className="input-field" id="newName" type="text" defaultValue={selectedRoom.name} style={{ flex: 1 }} />
-                <button className="btn btn-primary" onClick={() => handleAdminAction('updateName', document.getElementById('newName').value)}>Save</button>
-              </div>
-            </div>
-            <button className="btn" onClick={() => handleAdminAction('togglePublic')}>
-              {selectedRoom.isPublic ? 'Make Private' : 'Make Public'}
-            </button>
-            <div className="admin-members">
-              <strong>Members ({selectedRoom.members.length})</strong>
-              <ul>
-                {selectedRoom.members.map(mid => (
-                  <li key={mid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{mid === currentUser.uid ? 'You' : mid}</span>
-                    {mid !== currentUser.uid && (
-                      <button className="btn-icon" onClick={() => handleAdminAction('removeMember', mid)}>
-                        <i className="ph ph-x" style={{ color: 'var(--danger)' }}></i>
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <button className="btn" onClick={() => handleAdminAction('delete')} style={{ background: 'var(--danger)', color: 'white', marginTop: '12px' }}>
-              Delete Room
-            </button>
-          </div>
-        )}
+    const chatHeader = React.createElement('div', { className: 'chat-header' },
+      React.createElement('button', { className: 'btn-icon', onClick: () => { setView('list'); setSelectedRoom(null); } },
+        React.createElement('i', { className: 'ph ph-arrow-left' })),
+      React.createElement('div', { style: { flex: 1, textAlign: 'center' } },
+        React.createElement('strong', null, selectedRoom.name),
+        React.createElement('div', { style: { fontSize: '0.75rem', color: 'var(--text-secondary)' } }, selectedRoom.roomCode)
+      ),
+      React.createElement('button', { className: 'btn-icon', onClick: () => setShowAdmin(!showAdmin) },
+        React.createElement('i', { className: 'ph ph-dots-three-vertical' }))
+    );
 
-        {/* Messages */}
-        <div className="chat-messages">
-          {messages.map(msg => (
-            <div key={msg.id} className={`chat-bubble ${msg.senderId === currentUser.uid ? 'own' : 'other'}`}>
-              <div className="bubble-text">{msg.text}</div>
-              <div className="bubble-time">
-                {msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+    const messageElements = messages.map(msg =>
+      React.createElement('div', { key: msg.id, className: `chat-bubble ${msg.senderId === currentUser.uid ? 'own' : 'other'}` },
+        React.createElement('div', { className: 'bubble-text' }, msg.text),
+        React.createElement('div', { className: 'bubble-time' },
+          msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+        )
+      )
+    );
 
-        <form className="chat-input-area" onSubmit={sendMessage}>
-          <input className="input-field" type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type a message..." />
-          <button type="submit" className="btn btn-primary"><i className="ph ph-paper-plane-right"></i></button>
-        </form>
-      </div>
+    const messagesArea = React.createElement('div', { className: 'chat-messages' },
+      ...messageElements,
+      React.createElement('div', { ref: messagesEndRef })
+    );
+
+    const inputArea = React.createElement('form', { className: 'chat-input-area', onSubmit: sendMessage },
+      React.createElement('input', { className: 'input-field', type: 'text', value: newMessage, onChange: e => setNewMessage(e.target.value), placeholder: 'Type a message...' }),
+      React.createElement('button', { type: 'submit', className: 'btn btn-primary' },
+        React.createElement('i', { className: 'ph ph-paper-plane-right' }))
+    );
+
+    return React.createElement('div', { className: 'duo-container chat-active' },
+      chatHeader,
+      adminPanel,
+      messagesArea,
+      inputArea
     );
   };
 
@@ -339,4 +302,4 @@ export default function Rooms() {
     case 'chat': return renderChat();
     default: return renderList();
   }
-}
+                          }
