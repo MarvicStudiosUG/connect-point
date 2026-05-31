@@ -26,15 +26,15 @@ export default function Settings() {
     setCpCodeError('');
     setCpCodeSuccess('');
     const code = newCpCode.trim().toUpperCase();
-    if (!code.startsWith('CP-') || code.length !== 15) {
-      setCpCodeError('Format must be CP-XXXXXXXXXXXX');
+    // Now expects CP- + 10 digits = length 13
+    if (!code.startsWith('CP-') || code.length !== 13) {
+      setCpCodeError('Format must be CP-XXXXXXXXXX (10 digits)');
       return;
     }
     try {
       await changeUserCpCode(currentUser.uid, code);
       setCpCodeSuccess('CP code updated successfully!');
       setNewCpCode('');
-      // The context will update on next profile fetch – but we can also force a reload
       setTimeout(() => window.location.reload(), 2000);
     } catch (err) {
       setCpCodeError(err.message);
@@ -53,15 +53,12 @@ export default function Settings() {
   const handleDeleteAccount = async () => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        await user.delete();
-      }
+      if (user) await user.delete();
     } catch (err) {
       setCpCodeError('Could not delete account: ' + err.message);
     }
   };
 
-  // Last CP code change date (if any)
   const lastChanged = currentUser?.cpCodeLastChanged
     ? new Date(currentUser.cpCodeLastChanged.seconds * 1000).toLocaleDateString()
     : null;
@@ -70,7 +67,6 @@ export default function Settings() {
   if (!currentUser) return null;
 
   return React.createElement('div', { className: 'settings-container' },
-    // ---------- Profile header ----------
     React.createElement('div', { className: 'glass', style: { padding: '1.5rem', marginBottom: '16px' } },
       React.createElement('div', { className: 'profile-header' },
         React.createElement('div', { className: 'profile-avatar' },
@@ -82,7 +78,6 @@ export default function Settings() {
         React.createElement('p', { style: { color: 'var(--text-secondary)', marginTop: '4px' } }, currentUser.email)
       ),
 
-      // ---------- Current CP Code ----------
       React.createElement('div', { className: 'cp-code-section', style: { marginTop: '1.5rem' } },
         React.createElement('label', null, 'Your CP Code'),
         React.createElement('div', { className: 'cp-code-display' },
@@ -95,14 +90,13 @@ export default function Settings() {
         !canChange && React.createElement('p', { style: { fontSize: '0.75rem', color: 'var(--danger)', marginTop: '4px' } }, 'You can only change your CP code once every 30 days.')
       ),
 
-      // ---------- Change CP Code (if allowed) ----------
       canChange && React.createElement('form', { onSubmit: handleChangeCpCode, style: { marginTop: '16px' } },
         React.createElement('div', { className: 'input-group' },
-          React.createElement('label', null, 'New CP Code (CP-XXXXXXXXXXXX)'),
+          React.createElement('label', null, 'New CP Code (CP-XXXXXXXXXX)'),
           React.createElement('input', {
             className: 'input-field',
             type: 'text',
-            placeholder: 'CP-123456789012',
+            placeholder: 'CP-1234567890',
             value: newCpCode,
             onChange: (e) => setNewCpCode(e.target.value.toUpperCase()),
             required: true
@@ -114,7 +108,6 @@ export default function Settings() {
       )
     ),
 
-    // ---------- Security & Account ----------
     React.createElement('div', { className: 'glass', style: { padding: '1.5rem', marginBottom: '16px' } },
       React.createElement('h3', null, 'Security'),
       React.createElement('button', { className: 'btn', onClick: handleResetPassword, style: { width: '100%', marginTop: '12px' } },
@@ -136,7 +129,6 @@ export default function Settings() {
             React.createElement('i', { className: 'ph ph-trash' }), ' Delete Account')
     ),
 
-    // ---------- Sign Out ----------
     React.createElement('div', { className: 'glass', style: { padding: '1.5rem' } },
       React.createElement('button', {
         className: 'btn',
@@ -149,4 +141,4 @@ export default function Settings() {
         React.createElement('i', { className: 'ph ph-sign-out' }), ' Sign Out')
     )
   );
-                                          }
+}
