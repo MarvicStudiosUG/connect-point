@@ -20,40 +20,32 @@ export default function Settings() {
 
   if (!currentUser) return null;
 
-  return (
-    <div className="settings-container">
-      <div className="glass" style={{ padding: '1.5rem' }}>
-        <div className="profile-header">
-          <div className="profile-avatar">
-            {currentUser.photoURL ? (
-              <img src={currentUser.photoURL} alt="avatar" style={{ width: '80px', height: '80px', borderRadius: '50%' }} />
-            ) : (
-              <i className="ph ph-user-circle" style={{ fontSize: '4rem', color: 'var(--accent)' }}></i>
-            )}
-          </div>
-          <h2>{currentUser.displayName || currentUser.email}</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>{currentUser.email}</p>
-        </div>
-
-        <div className="cp-code-section">
-          <label>Your CP Code</label>
-          <div className="cp-code-display">
-            <code>{currentUser.cpCode}</code>
-            <button className="btn-icon" onClick={copyCPCode}>
-              <i className={`ph ${copied ? 'ph-check' : 'ph-copy'}`}></i>
-            </button>
-          </div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            Share this code with friends to connect.
-          </p>
-        </div>
-
-        <div className="settings-actions">
-          <button className="btn" onClick={handleLogout} style={{ background: 'var(--danger)', color: 'white', width: '100%' }}>
-            <i className="ph ph-sign-out"></i> Sign Out
-          </button>
-        </div>
-      </div>
-    </div>
+  return React.createElement('div', { className: 'settings-container' },
+    React.createElement('div', { className: 'glass', style: { padding: '1.5rem' } },
+      React.createElement('div', { className: 'profile-header' },
+        React.createElement('div', { className: 'profile-avatar' },
+          currentUser.photoURL ?
+            React.createElement('img', { src: currentUser.photoURL, alt: 'avatar', style: { width: '80px', height: '80px', borderRadius: '50%' } }) :
+            React.createElement('i', { className: 'ph ph-user-circle', style: { fontSize: '4rem', color: 'var(--accent)' } })
+        ),
+        React.createElement('h2', null, currentUser.displayName || currentUser.email),
+        React.createElement('p', { style: { color: 'var(--text-secondary)' } }, currentUser.email)
+      ),
+      React.createElement('div', { className: 'cp-code-section' },
+        React.createElement('label', null, 'Your CP Code'),
+        React.createElement('div', { className: 'cp-code-display' },
+          React.createElement('code', null, currentUser.cpCode),
+          React.createElement('button', { className: 'btn-icon', onClick: copyCPCode },
+            React.createElement('i', { className: `ph ${copied ? 'ph-check' : 'ph-copy'}` })
+          )
+        ),
+        React.createElement('p', { style: { fontSize: '0.8rem', color: 'var(--text-secondary)' } }, 'Share this code with friends to connect.')
+      ),
+      React.createElement('div', { className: 'settings-actions' },
+        React.createElement('button', { className: 'btn', onClick: handleLogout, style: { background: 'var(--danger)', color: 'white', width: '100%' } },
+          React.createElement('i', { className: 'ph ph-sign-out' }), ' Sign Out'
+        )
+      )
+    )
   );
 }
