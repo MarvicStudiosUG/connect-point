@@ -40,7 +40,14 @@
 <body>
   <div id="root"></div>
 
-  <!-- Global error handler (for debugging) -->
+  <!-- Install button (always visible after SW ready) -->
+  <div id="install-button-container" style="display:none; position:fixed; top:10px; right:10px; z-index:200;">
+    <button id="install-btn" class="btn btn-primary" style="padding:10px 16px; font-size:0.9rem; border-radius:20px;">
+      <i class="ph ph-download-simple"></i> Install
+    </button>
+  </div>
+
+  <!-- Global error handler -->
   <script>
     window.onerror = function(msg, url, line) {
       document.getElementById('root').innerHTML = 
@@ -53,43 +60,51 @@
     };
   </script>
 
-  <!-- Install button container (will be shown by our JS) -->
-  <div id="install-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; background: var(--surface); backdrop-filter: blur(20px); padding:16px; border-top:1px solid var(--border); z-index:200; text-align:center;">
-    <button id="install-btn" class="btn btn-primary" style="width:100%">Install App</button>
-  </div>
-
-  <!-- Service Worker registration + install prompt logic -->
+  <!-- Service Worker + Install logic -->
   <script>
     let deferredPrompt;
+    const installBtn = document.getElementById('install-btn');
+    const installContainer = document.getElementById('install-button-container');
 
-    // Register service worker
+    // Register Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-          .then(() => console.log('SW registered'))
-          .catch((err) => console.log('SW registration failed', err));
+          .then(() => {
+            console.log('SW registered');
+            // Show install button after SW is active
+            installContainer.style.display = 'block';
+          })
+          .catch((err) => {
+            console.warn('SW registration failed, but install may still work', err);
+            installContainer.style.display = 'block'; // show anyway
+          });
       });
     }
 
-    // Listen for the install prompt
+    // Capture the native install prompt
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      document.getElementById('install-banner').style.display = 'block';
     });
 
-    document.getElementById('install-btn').addEventListener('click', async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log('Install outcome:', outcome);
-      deferredPrompt = null;
-      document.getElementById('install-banner').style.display = 'none';
+    // Install button click
+    installBtn.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('Install outcome:', outcome);
+        deferredPrompt = null;
+        installContainer.style.display = 'none';
+      } else {
+        // Fallback: show instruction
+        alert('To install the app, tap the browser menu (three dots) and select "Add to Home screen" or "Install".');
+      }
     });
 
-    // Hide banner after install
+    // Hide button after installation
     window.addEventListener('appinstalled', () => {
-      document.getElementById('install-banner').style.display = 'none';
+      installContainer.style.display = 'none';
     });
   </script>
 
