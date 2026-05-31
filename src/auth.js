@@ -4,7 +4,8 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithPopup,
-  updateProfile
+  updateProfile,
+  sendEmailVerification
 } from 'firebase/auth';
 import { auth, googleProvider, githubProvider } from './config.js';
 
@@ -13,6 +14,7 @@ export default function Auth({ onLogin }) {
   const [formData, setFormData] = useState({ email: '', password: '', displayName: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -23,6 +25,8 @@ export default function Auth({ onLogin }) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setVerificationSent(false);
+
     try {
       if (mode === 'login') {
         const userCred = await signInWithEmailAndPassword(auth, formData.email, formData.password);
@@ -32,6 +36,9 @@ export default function Auth({ onLogin }) {
         if (formData.displayName) {
           await updateProfile(userCred.user, { displayName: formData.displayName });
         }
+        // Send email verification
+        await sendEmailVerification(userCred.user);
+        setVerificationSent(true);
         onLogin(userCred.user);
       } else if (mode === 'forgot') {
         await sendPasswordResetEmail(auth, formData.email);
@@ -56,6 +63,7 @@ export default function Auth({ onLogin }) {
     setLoading(false);
   };
 
+  // ---------- RENDER ----------
   const errorDiv = error ? React.createElement('div', {
     className: `fade-in ${error.startsWith('✅') ? 'success' : ''}`,
     style: {
@@ -63,6 +71,10 @@ export default function Auth({ onLogin }) {
       padding: '12px', borderRadius: '12px', marginBottom: '16px', fontSize: '0.9rem'
     }
   }, error) : null;
+
+  const verificationNotice = verificationSent ? React.createElement('div', {
+    style: { background: 'rgba(34,197,94,0.2)', padding: '12px', borderRadius: '12px', marginBottom: '16px', fontSize: '0.9rem', color: 'var(--success)' }
+  }, '✅ Verification email sent! Please check your inbox.') : null;
 
   const emailField = React.createElement('div', { className: 'input-group' },
     React.createElement('label', null, 'Email'),
@@ -127,6 +139,7 @@ export default function Auth({ onLogin }) {
       React.createElement('p', { style: { textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '2rem' } },
         mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Create your account' : 'Reset your password'),
       errorDiv,
+      verificationNotice,
       React.createElement('form', { onSubmit: handleEmailAuth },
         mode !== 'forgot' && displayNameField,
         mode !== 'forgot' && emailField,
@@ -139,4 +152,4 @@ export default function Auth({ onLogin }) {
       switchLinks
     )
   );
-                        }
+        }
