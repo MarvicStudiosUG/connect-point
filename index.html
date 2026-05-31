@@ -40,13 +40,6 @@
 <body>
   <div id="root"></div>
 
-  <!-- Install button (bottom‑left corner, small and unobtrusive) -->
-  <div id="install-button-container" style="display:none; position:fixed; bottom:80px; left:16px; z-index:200;">
-    <button id="install-btn" style="width:44px; height:44px; border-radius:50%; background: var(--accent); color: white; border: none; display:flex; align-items:center; justify-content:center; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor:pointer;">
-      <i class="ph ph-download-simple" style="font-size:1.4rem;"></i>
-    </button>
-  </div>
-
   <!-- Global error handler -->
   <script>
     window.onerror = function(msg, url, line) {
@@ -60,56 +53,29 @@
     };
   </script>
 
-  <!-- Service Worker + Install logic -->
+  <!-- Service Worker + Install prompt capture (no button) -->
   <script>
+    // Global deferredPrompt so terminal 'install' command can use it
     window.__cpDeferredPrompt = null;
 
-    const installBtn = document.getElementById('install-btn');
-    const installContainer = document.getElementById('install-button-container');
-
-    // Register Service Worker
+    // Register Service Worker (required for PWA)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-          .then(() => {
-            console.log('SW registered');
-            installContainer.style.display = 'block';
-          })
-          .catch((err) => {
-            console.warn('SW registration failed', err);
-            installContainer.style.display = 'block';
-          });
+          .then(() => console.log('Service Worker registered'))
+          .catch((err) => console.warn('Service Worker registration failed', err));
       });
     }
 
-    // Capture the native install prompt
+    // Capture the native install prompt when the browser fires it
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
-      window.__cpDeferredPrompt = e;
-      installContainer.style.display = 'block';
+      window.__cpDeferredPrompt = e; // save for terminal command
     });
 
-    // Install button click
-    installBtn.addEventListener('click', async () => {
-      if (window.__cpDeferredPrompt) {
-        window.__cpDeferredPrompt.prompt();
-        const { outcome } = await window.__cpDeferredPrompt.userChoice;
-        console.log('Install outcome:', outcome);
-        window.__cpDeferredPrompt = null;
-        if (outcome === 'accepted') installContainer.style.display = 'none';
-      } else {
-        // Fallback instructions
-        const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-        if (isIOS) {
-          alert('Tap the Share button and then "Add to Home Screen".');
-        } else {
-          alert('Tap the browser menu (⋮) and select "Install app" or "Add to Home screen".');
-        }
-      }
-    });
-
+    // Reset prompt after installation
     window.addEventListener('appinstalled', () => {
-      installContainer.style.display = 'none';
+      window.__cpDeferredPrompt = null;
     });
   </script>
 
