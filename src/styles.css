@@ -711,4 +711,11 @@ body::before {
 }
 .search-bar input {
   width: 100%;
+}
+
+/* ========== Success Message ========== */
+.success-msg {
+  color: var(--success);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
   }
