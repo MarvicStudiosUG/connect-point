@@ -6,7 +6,7 @@ import { changeUserCpCode } from './db.js';
 export default function Settings() {
   const currentUser = useUser();
   const [copied, setCopied] = useState(false);
-  const [newCpCode, setNewCpCode] = useState('');
+  const [newCpDigits, setNewCpDigits] = useState(''); // only 10 digits
   const [cpCodeError, setCpCodeError] = useState('');
   const [cpCodeSuccess, setCpCodeSuccess] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -25,16 +25,18 @@ export default function Settings() {
     e.preventDefault();
     setCpCodeError('');
     setCpCodeSuccess('');
-    const code = newCpCode.trim().toUpperCase();
-    // Now expects CP- + 10 digits = length 13
-    if (!code.startsWith('CP-') || code.length !== 13) {
-      setCpCodeError('Format must be CP-XXXXXXXXXX (10 digits)');
+
+    // Validate that it's exactly 10 digits
+    if (!/^\d{10}$/.test(newCpDigits)) {
+      setCpCodeError('Enter exactly 10 digits (0-9)');
       return;
     }
+
+    const fullCode = 'CP-' + newCpDigits;
     try {
-      await changeUserCpCode(currentUser.uid, code);
+      await changeUserCpCode(currentUser.uid, fullCode);
       setCpCodeSuccess('CP code updated successfully!');
-      setNewCpCode('');
+      setNewCpDigits('');
       setTimeout(() => window.location.reload(), 2000);
     } catch (err) {
       setCpCodeError(err.message);
@@ -92,18 +94,25 @@ export default function Settings() {
 
       canChange && React.createElement('form', { onSubmit: handleChangeCpCode, style: { marginTop: '16px' } },
         React.createElement('div', { className: 'input-group' },
-          React.createElement('label', null, 'New CP Code (CP-XXXXXXXXXX)'),
-          React.createElement('input', {
-            className: 'input-field',
-            type: 'text',
-            placeholder: 'CP-1234567890',
-            value: newCpCode,
-            onChange: (e) => setNewCpCode(e.target.value.toUpperCase()),
-            required: true
-          })
+          React.createElement('label', null, 'New CP Code (enter 10 digits)'),
+          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+            React.createElement('span', { style: { fontWeight: '600', color: 'var(--accent-light)' } }, 'CP-'),
+            React.createElement('input', {
+              className: 'input-field',
+              type: 'text',
+              inputMode: 'numeric',
+              pattern: '\\d{10}',
+              maxLength: 10,
+              placeholder: '1234567890',
+              value: newCpDigits,
+              onChange: (e) => setNewCpDigits(e.target.value.replace(/\D/g, '').slice(0, 10)),
+              required: true,
+              style: { flex: 1 }
+            })
+          )
         ),
         cpCodeError && React.createElement('div', { className: 'error-msg', style: { fontSize: '0.85rem' } }, cpCodeError),
-        cpCodeSuccess && React.createElement('div', { className: 'success-msg', style: { color: 'var(--success)', fontSize: '0.85rem', marginBottom: '8px' } }, cpCodeSuccess),
+        cpCodeSuccess && React.createElement('div', { className: 'success-msg' }, cpCodeSuccess),
         React.createElement('button', { className: 'btn btn-primary', type: 'submit', style: { width: '100%' } }, 'Change CP Code')
       )
     ),
