@@ -119,7 +119,10 @@ export default function SoloChat() {
               const city = args.join(' ');
               const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%w`);
               if (!res.ok) throw new Error('City not found');
-              result = `Weather in ${city}: ${(await res.text()).trim()}`;
+              const text = await res.text(); // <-- only one read
+              // If the response looks like HTML (some error pages), throw an error
+              if (text.trim().startsWith('<')) throw new Error('Invalid response from service');
+              result = `Weather in ${city}: ${text.trim()}`;
             }
             break;
           case 'define':
@@ -226,7 +229,7 @@ export default function SoloChat() {
           case 'movie':
             if (!args[0]) result = 'Usage: movie <title>';
             else {
-              const apiKey = MOVIE_API_KEY || 'trilogy'; // 'trilogy' is a public test key from OMDb
+              const apiKey = MOVIE_API_KEY || 'trilogy'; // fallback test key
               const res = await fetchWithTimeout(`https://www.omdbapi.com/?t=${encodeURIComponent(args.join(' '))}&apikey=${apiKey}`);
               if (!res.ok) throw new Error('Movie not found');
               const data = await res.json();
@@ -482,4 +485,4 @@ export default function SoloChat() {
       }
     `)
   );
-            }
+                }
