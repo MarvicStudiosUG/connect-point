@@ -21,10 +21,8 @@ export default function SoloChat() {
     if (inputRef.current) inputRef.current.focus();
   };
 
-  // All commands that need an API call (keyless APIs)
   const cloudCommands = ['weather', 'define', 'crypto', 'joke', 'news', 'qr', 'ip'];
 
-  // Helper: fetch with timeout
   const fetchWithTimeout = (url, timeout = 5000) => {
     return Promise.race([
       fetch(url),
@@ -44,7 +42,6 @@ export default function SoloChat() {
     const mainCmd = parts[0].toLowerCase();
     const args = parts.slice(1);
 
-    // Cloud commands (free APIs, no key)
     if (cloudCommands.includes(mainCmd)) {
       setLoading(true);
       setHistory([...newHistory, { type: 'response', text: '⏳ Fetching...' }]);
@@ -53,10 +50,8 @@ export default function SoloChat() {
         let result = '';
         switch (mainCmd) {
           case 'weather':
-            if (!args[0]) {
-              result = 'Usage: weather <city>';
-            } else {
-              // wttr.in – free, no key
+            if (!args[0]) result = 'Usage: weather <city>';
+            else {
               const city = args.join(' ');
               const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%w`);
               if (!res.ok) throw new Error('City not found');
@@ -64,11 +59,9 @@ export default function SoloChat() {
               result = `🌤 ${city}: ${text.trim()}`;
             }
             break;
-
           case 'define':
-            if (!args[0]) {
-              result = 'Usage: define <word>';
-            } else {
+            if (!args[0]) result = 'Usage: define <word>';
+            else {
               const res = await fetchWithTimeout(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(args[0])}`);
               if (!res.ok) throw new Error('Word not found');
               const data = await res.json();
@@ -80,11 +73,9 @@ export default function SoloChat() {
               result = output.trim();
             }
             break;
-
           case 'crypto':
-            if (!args[0]) {
-              result = 'Usage: crypto <coin_id> (e.g., bitcoin)';
-            } else {
+            if (!args[0]) result = 'Usage: crypto <coin_id>';
+            else {
               const res = await fetchWithTimeout(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(args[0])}&vs_currencies=usd`);
               if (!res.ok) throw new Error('Coin not found');
               const data = await res.json();
@@ -92,7 +83,6 @@ export default function SoloChat() {
               result = `💰 ${args[0].toUpperCase()}: $${data[args[0]].usd}`;
             }
             break;
-
           case 'joke':
             {
               const res = await fetchWithTimeout('https://official-joke-api.appspot.com/random_joke');
@@ -101,9 +91,7 @@ export default function SoloChat() {
               result = `😂 ${data.setup}\n   ${data.punchline}`;
             }
             break;
-
           case 'news':
-            // RSS feed from NPR (no key)
             try {
               const res = await fetchWithTimeout('https://feeds.npr.org/1001/rss.xml');
               const text = await res.text();
@@ -120,16 +108,13 @@ export default function SoloChat() {
               result = 'News feed unavailable right now.';
             }
             break;
-
           case 'qr':
-            if (!args[0]) {
-              result = 'Usage: qr <text or url>';
-            } else {
+            if (!args[0]) result = 'Usage: qr <text or url>';
+            else {
               const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(args.join(' '))}`;
-              result = `📱 QR Code generated (open in browser): ${qrUrl}`;
+              result = `📱 QR Code generated: ${qrUrl}`;
             }
             break;
-
           case 'ip':
             {
               const res = await fetchWithTimeout('https://api.ipify.org?format=json');
@@ -137,11 +122,9 @@ export default function SoloChat() {
               result = `🌐 Your public IP: ${data.ip}`;
             }
             break;
-
           default:
             result = `Command not implemented: ${mainCmd}`;
         }
-
         setHistory(prev => [...prev.slice(0, -1), { type: 'response', text: result }]);
       } catch (err) {
         setHistory(prev => [...prev.slice(0, -1), { type: 'error', text: `Error: ${err.message}` }]);
@@ -150,29 +133,13 @@ export default function SoloChat() {
       return;
     }
 
-    // Local commands (no internet needed)
+    // Local commands
     let response = '';
     let isError = false;
 
     switch (mainCmd) {
       case 'help':
-        response = `Available commands:
-  help          - Show this help
-  clear         - Clear terminal
-  time          - Current time
-  date          - Current date
-  echo <text>   - Print text
-  whoami        - Show guest name
-  version       - CP Terminal version
-  calc <expr>   - Math expression
-  weather <city> - Live weather
-  define <word>  - Dictionary definition
-  crypto <coin>  - Crypto price
-  joke           - Random joke
-  news           - Latest NPR headlines
-  qr <text>      - Generate QR code
-  ip             - Your public IP
-  quote          - Inspirational quote`;
+        response = 'Available commands:\n  help, clear, time, date, echo, whoami, version, calc, weather, define, crypto, joke, news, qr, ip, quote';
         break;
       case 'clear':
         setHistory([]);
@@ -242,47 +209,51 @@ export default function SoloChat() {
     }
   };
 
-  return (
-    <div className="terminal" onClick={focusInput}>
-      <div className="terminal-output" ref={outputRef}>
-        {history.map((entry, idx) => (
-          <div key={idx} className={`terminal-line ${entry.type}`}>
-            {entry.text}
-          </div>
-        ))}
-        <div className="terminal-line command" style={{ display: 'flex' }}>
-          <span className="terminal-prompt">$</span>
-          <span>{input}</span>
-          {loading && <span className="blinking-cursor" style={{
-            display: 'inline-block', width: '8px', height: '1.2em',
-            backgroundColor: 'var(--accent-light)', marginLeft: '2px',
-            animation: 'blink 1s step-end infinite', verticalAlign: 'text-bottom'
-          }}></span>}
-        </div>
-      </div>
-      <div className="terminal-input-area">
-        <span className="terminal-prompt">$</span>
-        <input
-          ref={inputRef}
-          type="text"
-          className="terminal-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a command..."
-          spellCheck={false}
-          autoComplete="off"
-          autoFocus
-          disabled={loading}
-        />
-      </div>
+  // Build the output lines array
+  const outputLines = history.map((entry, idx) =>
+    React.createElement('div', { key: idx, className: `terminal-line ${entry.type}` }, entry.text)
+  );
 
-      <style>{`
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
-      `}</style>
-    </div>
+  // Current input line with blinking cursor
+  const inputLine = React.createElement('div', { className: 'terminal-line command', style: { display: 'flex' } },
+    React.createElement('span', { className: 'terminal-prompt' }, '$'),
+    React.createElement('span', null, input),
+    loading && React.createElement('span', {
+      className: 'blinking-cursor',
+      style: {
+        display: 'inline-block', width: '8px', height: '1.2em',
+        backgroundColor: 'var(--accent-light)', marginLeft: '2px',
+        animation: 'blink 1s step-end infinite', verticalAlign: 'text-bottom'
+      }
+    })
+  );
+
+  return React.createElement('div', { className: 'terminal', onClick: focusInput },
+    React.createElement('div', { className: 'terminal-output', ref: outputRef },
+      ...outputLines,
+      inputLine
+    ),
+    React.createElement('div', { className: 'terminal-input-area' },
+      React.createElement('span', { className: 'terminal-prompt' }, '$'),
+      React.createElement('input', {
+        ref: inputRef,
+        type: 'text',
+        className: 'terminal-input',
+        value: input,
+        onChange: (e) => setInput(e.target.value),
+        onKeyDown: handleKeyDown,
+        placeholder: 'Type a command...',
+        spellCheck: false,
+        autoComplete: 'off',
+        autoFocus: true,
+        disabled: loading
+      })
+    ),
+    React.createElement('style', null, `
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+    `)
   );
 }
