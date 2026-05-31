@@ -31,7 +31,7 @@ export default function SoloChat() {
   const allCommands = [
     'help', 'clear', 'time', 'date', 'echo', 'whoami', 'version', 'calc',
     'weather', 'define', 'crypto', 'joke', 'news', 'qr', 'ip', 'fact',
-    'randomuser', 'timezone', 'currency', 'lyrics', 'movie',
+    'randomuser', 'timezone', 'currency', 'lyrics', 'movie', 'install',
     'alias', 'unalias', 'aliases', 'quote',
     ...Object.keys(aliases)
   ];
@@ -119,8 +119,7 @@ export default function SoloChat() {
               const city = args.join(' ');
               const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%w`);
               if (!res.ok) throw new Error('City not found');
-              const text = await res.text(); // <-- only one read
-              // If the response looks like HTML (some error pages), throw an error
+              const text = await res.text();
               if (text.trim().startsWith('<')) throw new Error('Invalid response from service');
               result = `Weather in ${city}: ${text.trim()}`;
             }
@@ -229,7 +228,7 @@ export default function SoloChat() {
           case 'movie':
             if (!args[0]) result = 'Usage: movie <title>';
             else {
-              const apiKey = MOVIE_API_KEY || 'trilogy'; // fallback test key
+              const apiKey = MOVIE_API_KEY || 'trilogy';
               const res = await fetchWithTimeout(`https://www.omdbapi.com/?t=${encodeURIComponent(args.join(' '))}&apikey=${apiKey}`);
               if (!res.ok) throw new Error('Movie not found');
               const data = await res.json();
@@ -246,13 +245,13 @@ export default function SoloChat() {
       return;
     }
 
-    // Local commands
+    // Local commands (including the new 'install' command)
     let response = '';
     let isError = false;
     switch (mainCmd) {
       case 'help':
         response = `Available Commands\n\n` +
-          `General: help, clear, time, date, echo, whoami, version\n\n` +
+          `General: help, clear, time, date, echo, whoami, version, install\n\n` +
           `Internet: weather <city>, define <word>, crypto <coin>, joke, news, qr <text>, ip\n` +
           `Fun: fact, randomuser, quote\n` +
           `Math: calc <expr>\n` +
@@ -261,6 +260,20 @@ export default function SoloChat() {
           `Media: lyrics <artist> <song>, movie <title>\n\n` +
           `Aliases: alias <short> <command>, unalias <short>, aliases\n\n` +
           `Use Tab for autocomplete, Up/Down for history.`;
+        break;
+      case 'install':
+        if (window.__cpDeferredPrompt) {
+          window.__cpDeferredPrompt.prompt();
+          const outcome = await window.__cpDeferredPrompt.userChoice;
+          if (outcome.outcome === 'accepted') {
+            response = 'App installation started.';
+          } else {
+            response = 'Installation cancelled.';
+          }
+          window.__cpDeferredPrompt = null;
+        } else {
+          response = 'Install prompt not available. Tap the browser menu and select "Add to Home screen".';
+        }
         break;
       case 'time':
         response = new Date().toLocaleTimeString();
@@ -275,7 +288,7 @@ export default function SoloChat() {
         response = userName;
         break;
       case 'version':
-        response = 'CP Terminal v2.2 – Professional Edition';
+        response = 'CP Terminal v2.3 – PWA Edition';
         break;
       case 'calc':
         try {
@@ -485,4 +498,4 @@ export default function SoloChat() {
       }
     `)
   );
-                }
+        }
