@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import { useUser } from './UserContext.js';
 import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { changeUserCpCode } from './db.js';
+import { updateDoc, doc } from 'firebase/firestore';
+import { db } from './config.js';
 
 export default function Settings() {
   const currentUser = useUser();
   const [copied, setCopied] = useState(false);
-  const [newCpDigits, setNewCpDigits] = useState(''); // only 10 digits
+  const [newCpDigits, setNewCpDigits] = useState('');
   const [cpCodeError, setCpCodeError] = useState('');
   const [cpCodeSuccess, setCpCodeSuccess] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [passwordResetSent, setPasswordResetSent] = useState(false);
+  const [status, setStatus] = useState(currentUser?.status || '');
+  const [statusSaved, setStatusSaved] = useState(false);
 
   const auth = getAuth();
 
@@ -26,7 +30,6 @@ export default function Settings() {
     setCpCodeError('');
     setCpCodeSuccess('');
 
-    // Validate that it's exactly 10 digits
     if (!/^\d{10}$/.test(newCpDigits)) {
       setCpCodeError('Enter exactly 10 digits (0-9)');
       return;
@@ -61,6 +64,16 @@ export default function Settings() {
     }
   };
 
+  const handleSaveStatus = async () => {
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), { status });
+      setStatusSaved(true);
+      setTimeout(() => setStatusSaved(false), 2000);
+    } catch (err) {
+      setCpCodeError(err.message);
+    }
+  };
+
   const lastChanged = currentUser?.cpCodeLastChanged
     ? new Date(currentUser.cpCodeLastChanged.seconds * 1000).toLocaleDateString()
     : null;
@@ -78,6 +91,22 @@ export default function Settings() {
         ),
         React.createElement('h2', null, currentUser.displayName || currentUser.email),
         React.createElement('p', { style: { color: 'var(--text-secondary)', marginTop: '4px' } }, currentUser.email)
+      ),
+
+      // Status/Bio
+      React.createElement('div', { style: { marginTop: '1.5rem' } },
+        React.createElement('label', null, 'Status'),
+        React.createElement('input', {
+          className: 'input-field',
+          type: 'text',
+          placeholder: 'Add a short bio...',
+          value: status,
+          onChange: (e) => setStatus(e.target.value),
+          style: { marginTop: '4px' }
+        }),
+        React.createElement('button', { className: 'btn btn-primary', onClick: handleSaveStatus, style: { marginTop: '8px', width: '100%' } },
+          'Save Status'),
+        statusSaved && React.createElement('p', { className: 'success-msg' }, 'Status updated!')
       ),
 
       React.createElement('div', { className: 'cp-code-section', style: { marginTop: '1.5rem' } },
@@ -150,4 +179,4 @@ export default function Settings() {
         React.createElement('i', { className: 'ph ph-sign-out' }), ' Sign Out')
     )
   );
-}
+                          }
