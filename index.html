@@ -7,7 +7,7 @@
 
   <!-- PWA manifest -->
   <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="theme-color" content="#7f5af0" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -40,12 +40,12 @@
 <body>
   <div id="root"></div>
 
-  <!-- Global error handler -->
+  <!-- Global error handler (for debugging) -->
   <script>
     window.onerror = function(msg, url, line) {
       document.getElementById('root').innerHTML = 
         '<div style="padding:20px; color:white; background:#1a1a2e; min-height:100vh;">' +
-        '<h2>❌ Error</h2>' +
+        '<h2>Error</h2>' +
         '<p><b>Message:</b> ' + msg + '</p>' +
         '<p><b>File:</b> ' + url + '</p>' +
         '<p><b>Line:</b> ' + line + '</p>' +
@@ -53,13 +53,44 @@
     };
   </script>
 
-  <!-- Service Worker Registration -->
+  <!-- Install button container (will be shown by our JS) -->
+  <div id="install-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; background: var(--surface); backdrop-filter: blur(20px); padding:16px; border-top:1px solid var(--border); z-index:200; text-align:center;">
+    <button id="install-btn" class="btn btn-primary" style="width:100%">Install App</button>
+  </div>
+
+  <!-- Service Worker registration + install prompt logic -->
   <script>
+    let deferredPrompt;
+
+    // Register service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('/sw.js')
+          .then(() => console.log('SW registered'))
+          .catch((err) => console.log('SW registration failed', err));
       });
     }
+
+    // Listen for the install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('install-banner').style.display = 'block';
+    });
+
+    document.getElementById('install-btn').addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log('Install outcome:', outcome);
+      deferredPrompt = null;
+      document.getElementById('install-banner').style.display = 'none';
+    });
+
+    // Hide banner after install
+    window.addEventListener('appinstalled', () => {
+      document.getElementById('install-banner').style.display = 'none';
+    });
   </script>
 
   <!-- Main app -->
