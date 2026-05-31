@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
-  addDoc, serverTimestamp, doc, getDocs, where, updateDoc
+  addDoc, serverTimestamp, doc, getDocs, where
 } from 'firebase/firestore';
 import {
   db,
@@ -14,7 +14,6 @@ import {
   deleteRoom,
   setRoomTyping,
   listenRoomTyping,
-  uploadFile,
   addReaction
 } from './db.js';
 import { useUser } from './UserContext.js';
@@ -28,7 +27,6 @@ export default function Rooms() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   const [createForm, setCreateForm] = useState({ name: '', description: '', isPublic: true, password: '' });
   const [createError, setCreateError] = useState('');
@@ -38,7 +36,6 @@ export default function Rooms() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [searchRoomName, setSearchRoomName] = useState('');
   const [typingUsers, setTypingUsers] = useState([]);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -117,25 +114,6 @@ export default function Rooms() {
     setNewMessage('');
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !selectedRoom) return;
-    setUploading(true);
-    try {
-      const path = `room-files/${selectedRoom.id}/${Date.now()}_${file.name}`;
-      const url = await uploadFile(file, path);
-      await addDoc(collection(db, 'rooms', selectedRoom.id, 'messages'), {
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || currentUser.email,
-        text: `📎 ${file.name}`,
-        fileUrl: url,
-        timestamp: serverTimestamp(),
-      });
-    } catch (err) { alert('Upload failed'); }
-    setUploading(false);
-    e.target.value = '';
-  };
-
   const handleReaction = async (msgId, emoji) => {
     if (!selectedRoom) return;
     const path = `rooms/${selectedRoom.id}/messages/${msgId}`;
@@ -184,7 +162,6 @@ export default function Rooms() {
     setPublicRooms(results);
   };
 
-  // Render helpers
   const renderList = () => React.createElement('div', { className: 'rooms-container' },
     React.createElement('div', { className: 'rooms-header' },
       React.createElement('h2', null, 'Rooms'),
@@ -318,7 +295,7 @@ export default function Rooms() {
     const messageElements = messages.map(msg => {
       const reactions = msg.reactions || {};
       return React.createElement('div', { key: msg.id, className: `chat-bubble ${msg.senderId === currentUser.uid ? 'own' : 'other'}` },
-        msg.fileUrl ? React.createElement('a', { href: msg.fileUrl, target: '_blank' }, msg.text) : React.createElement('div', { className: 'bubble-text' }, msg.text),
+        React.createElement('div', { className: 'bubble-text' }, msg.text),
         Object.keys(reactions).length > 0 && React.createElement('div', { className: 'reactions-bar' },
           Object.entries(reactions).map(([emoji, users]) => React.createElement('span', { key: emoji, className: 'reaction-emoji', onClick: () => handleReaction(msg.id, emoji) }, `${emoji} ${users.length}`))
         ),
@@ -334,9 +311,6 @@ export default function Rooms() {
     );
 
     const inputArea = React.createElement('form', { className: 'chat-input-area', onSubmit: sendMessage },
-      React.createElement('input', { type: 'file', ref: fileInputRef, style: { display: 'none' }, onChange: handleFileUpload }),
-      React.createElement('button', { type: 'button', className: 'btn-icon', onClick: () => fileInputRef.current.click(), disabled: uploading },
-        React.createElement('i', { className: 'ph ph-paperclip' })),
       React.createElement('input', { className: 'input-field', type: 'text', value: newMessage, onChange: e => setNewMessage(e.target.value), placeholder: 'Type a message...', onFocus: () => handleTyping(true), onBlur: () => handleTyping(false) }),
       React.createElement('button', { type: 'submit', className: 'btn btn-primary' },
         React.createElement('i', { className: 'ph ph-paper-plane-right' }))
@@ -357,4 +331,4 @@ export default function Rooms() {
     case 'chat': return renderChat();
     default: return renderList();
   }
-      }
+                                }
