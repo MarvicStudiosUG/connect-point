@@ -5,11 +5,11 @@ import {
 } from 'firebase/firestore';
 import { db } from './config.js';
 
-// ---------- CP code generation ----------
+// ---------- CP code generation (10 digits) ----------
 function generateCPCode() {
   const digits = '0123456789';
   let code = 'CP-';
-  for (let i = 0; i < 12; i++) code += digits.charAt(Math.floor(Math.random() * 10));
+  for (let i = 0; i < 10; i++) code += digits.charAt(Math.floor(Math.random() * 10));
   return code;
 }
 
@@ -60,7 +60,7 @@ export async function getUserByCpCode(cpCode) {
   return getUserProfile(codeSnap.data().uid);
 }
 
-// ---------- Change CP Code (once per month) ----------
+// ---------- Change CP Code (once per month) – now expects CP- plus 10 digits ----------
 export async function changeUserCpCode(uid, newCpCode) {
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
@@ -77,8 +77,9 @@ export async function changeUserCpCode(uid, newCpCode) {
     }
   }
 
-  if (!/^CP-\d{12}$/.test(newCpCode)) {
-    throw new Error('Invalid CP code format (must be CP-XXXXXXXXXXXX)');
+  // Validate format: CP- followed by exactly 10 digits
+  if (!/^CP-\d{10}$/.test(newCpCode)) {
+    throw new Error('Invalid CP code format (must be CP-XXXXXXXXXX)');
   }
 
   const codeDoc = await getDoc(doc(db, 'cpCodes', newCpCode));
@@ -317,5 +318,5 @@ export async function addReaction(messagePath, uid, emoji) {
   await updateDoc(ref, { reactions });
 }
 
-// Re-export db for direct use in components
+// Re-export db
 export { db };
