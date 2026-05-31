@@ -14,7 +14,8 @@ import {
   deleteRoom,
   setRoomTyping,
   listenRoomTyping,
-  addReaction
+  addReaction,
+  deleteMessage
 } from './db.js';
 import { useUser } from './UserContext.js';
 
@@ -26,6 +27,7 @@ export default function Rooms() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [replyTo, setReplyTo] = useState(null);
   const messagesEndRef = useRef(null);
 
   const [createForm, setCreateForm] = useState({ name: '', description: '', isPublic: true, password: '' });
@@ -105,19 +107,31 @@ export default function Rooms() {
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedRoom) return;
-    await addDoc(collection(db, 'rooms', selectedRoom.id, 'messages'), {
+    const msgData = {
       senderId: currentUser.uid,
       senderName: currentUser.displayName || currentUser.email,
       text: newMessage.trim(),
       timestamp: serverTimestamp(),
-    });
+    };
+    if (replyTo) {
+      msgData.replyTo = { id: replyTo.id, text: replyTo.text, senderName: replyTo.senderName };
+    }
+    await addDoc(collection(db, 'rooms', selectedRoom.id, 'messages'), msgData);
     setNewMessage('');
+    setReplyTo(null);
+    handleTyping(false);
   };
 
-  const handleReaction = async (msgId, emoji) => {
+  const handleReaction = async (msgId, reactionType) => {
     if (!selectedRoom) return;
     const path = `rooms/${selectedRoom.id}/messages/${msgId}`;
-    await addReaction(path, currentUser.uid, emoji);
+    await addReaction(path, currentUser.uid, reactionType);
+  };
+
+  const handleDeleteMessage = async (msgId) => {
+    if (confirm('Delete this message?')) {
+      await deleteMessage(`rooms/${selectedRoom.id}/messages/${msgId}`, currentUser.uid);
+    }
   };
 
   const handleTyping = (isTyping) => {
@@ -161,6 +175,13 @@ export default function Rooms() {
     snapshot.forEach(d => results.push({ id: d.id, ...d.data() }));
     setPublicRooms(results);
   };
+
+  // Reaction types and icons mapping
+  const reactionTypes = [
+    { type: 'like', icon: 'ph ph-thumbs-up', label: 'Like' },
+    { type: 'love', icon: 'ph ph-heart', label: 'Love' },
+    { type: 'laugh', icon: 'ph ph-smiley', label: 'Laugh' },
+  ];
 
   const renderList = () => React.createElement('div', { className: 'rooms-container' },
     React.createElement('div', { className: 'rooms-header' },
@@ -293,14 +314,42 @@ export default function Rooms() {
     );
 
     const messageElements = messages.map(msg => {
+      const isOwn = msg.senderId === currentUser.uid;
+      const replyPreview = msg.replyTo ? React.createElement('div', { className: 'reply-preview' },
+        React.createElement('span', null, msg.replyTo.senderName + ': ' + msg.replyTo.text)
+      ) : null;
+
+      // Reactions display
       const reactions = msg.reactions || {};
-      return React.createElement('div', { key: msg.id, className: `chat-bubble ${msg.senderId === currentUser.uid ? 'own' : 'other'}` },
+      const reactionIcons = Object.entries(reactions).map(([type, users]) => {
+        const icon = reactionTypes.find(r => r.type === type)?.icon || 'ph ph-thumbs-up';
+        return React.createElement('span', { key: type, className: 'reaction-item', title: `${users.length} ${type}` },
+          React.createElement('i', { className: icon + ' reaction-icon' }),
+          users.length
+        );
+      });
+
+      const actionButtons = React.createElement('div', { className: 'message-actions' },
+        React.createElement('button', { className: 'btn-icon', title: 'Reply', onClick: () => setReplyTo({ id: msg.id, text: msg.text, senderName: msg.senderName }) },
+          React.createElement('i', { className: 'ph ph-arrow-bend-left-up' })),
+        isOwn && React.createElement('button', { className: 'btn-icon', title: 'Delete', onClick: () => handleDeleteMessage(msg.id) },
+          React.createElement('i', { className: 'ph ph-trash', style: { color: 'var(--danger)' } })),
+        // Reaction buttons
+        ...reactionTypes.map(({ type, icon }) =>
+          React.createElement('button', { key: type, className: 'btn-icon', title: type, onClick: () => handleReaction(msg.id, type) },
+            React.createElement('i', { className: icon }))
+        )
+      );
+
+      return React.createElement('div', { key: msg.id, className: `chat-bubble ${isOwn ? 'own' : 'other'}` },
+        replyPreview,
         React.createElement('div', { className: 'bubble-text' }, msg.text),
-        Object.keys(reactions).length > 0 && React.createElement('div', { className: 'reactions-bar' },
-          Object.entries(reactions).map(([emoji, users]) => React.createElement('span', { key: emoji, className: 'reaction-emoji', onClick: () => handleReaction(msg.id, emoji) }, `${emoji} ${users.length}`))
-        ),
-        React.createElement('div', { className: 'bubble-time' },
-          msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+        reactionIcons.length > 0 && React.createElement('div', { className: 'reactions-bar' }, ...reactionIcons),
+        React.createElement('div', { className: 'bubble-meta' },
+          React.createElement('div', { className: 'bubble-time' },
+            msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+          ),
+          actionButtons
         )
       );
     });
@@ -321,6 +370,10 @@ export default function Rooms() {
       adminPanel,
       typingUsers.length > 0 && React.createElement('div', { style: { fontStyle: 'italic', padding: '4px 16px', color: 'var(--text-secondary)' } }, 'Typing...'),
       messagesArea,
+      replyTo && React.createElement('div', { className: 'reply-bar' },
+        React.createElement('span', null, 'Replying to ' + replyTo.senderName + ': ' + replyTo.text),
+        React.createElement('button', { className: 'btn-icon', onClick: () => setReplyTo(null) }, React.createElement('i', { className: 'ph ph-x' }))
+      ),
       inputArea
     );
   };
@@ -331,4 +384,4 @@ export default function Rooms() {
     case 'chat': return renderChat();
     default: return renderList();
   }
-                                }
+  }
