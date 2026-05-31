@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useUser } from './UserContext.js';
 
 export default function SoloChat() {
+  const currentUser = useUser();   // <-- get logged‑in user
   const [history, setHistory] = useState(() => {
     const saved = localStorage.getItem('cp-terminal-history');
     return saved ? JSON.parse(saved) : [
@@ -31,6 +33,9 @@ export default function SoloChat() {
     'randomuser', 'timezone', 'alias', 'unalias', 'aliases', 'quote',
     ...Object.keys(aliases)
   ];
+
+  // The user‑friendly name shown in the prompt
+  const userName = currentUser?.displayName || currentUser?.email || 'guest';
 
   // Persist history
   useEffect(() => {
@@ -229,7 +234,7 @@ export default function SoloChat() {
         response = args.join(' ');
         break;
       case 'whoami':
-        response = 'guest@cp-terminal';
+        response = userName;
         break;
       case 'version':
         response = 'CP Terminal v2.1 – Enhanced Edition';
@@ -278,7 +283,7 @@ export default function SoloChat() {
     const entry = { type: isError ? 'error' : 'response', text: formatResponse(response) };
     setHistory([...newHistory, entry]);
     setInput('');
-  }, [history, aliases, showClearConfirm]);
+  }, [history, aliases, showClearConfirm, userName]);
 
   const confirmClear = (confirmed) => {
     if (confirmed) {
@@ -378,7 +383,7 @@ export default function SoloChat() {
     className: 'terminal-line command',
     style: { display: 'flex' }
   },
-    React.createElement('span', { className: 'terminal-prompt' }, 'guest ~ '),
+    React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
     React.createElement('span', null, input),
     loading && React.createElement('span', { className: 'blinking-cursor' })
   );
@@ -404,7 +409,7 @@ export default function SoloChat() {
 
     // Input area with send button
     React.createElement('div', { className: 'terminal-input-area' },
-      React.createElement('span', { className: 'terminal-prompt' }, 'guest ~ '),
+      React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
       React.createElement('input', {
         ref: inputRef,
         type: 'text',
@@ -447,4 +452,4 @@ export default function SoloChat() {
       }
     `)
   );
-                }
+}
