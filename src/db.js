@@ -3,8 +3,7 @@ import {
   collection, addDoc, query, where, getDocs,
   updateDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, orderBy, serverTimestamp
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './config.js';
+import { db } from './config.js';
 
 // ---------- CP code generation ----------
 function generateCPCode() {
@@ -59,6 +58,50 @@ export async function getUserByCpCode(cpCode) {
   const codeSnap = await getDoc(doc(db, 'cpCodes', cpCode));
   if (!codeSnap.exists()) return null;
   return getUserProfile(codeSnap.data().uid);
+}
+
+// ---------- Change CP Code (once per month) ----------
+export async function changeUserCpCode(uid, newCpCode) {
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) throw new Error('User not found');
+
+  const userData = userSnap.data();
+  const lastChanged = userData.cpCodeLastChanged?.toDate() || null;
+
+  if (lastChanged) {
+    const daysSince = (Date.now() - lastChanged.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSince < 30) {
+      const remaining = Math.ceil(30 - daysSince);
+      throw new Error(`You can change your CP code again in ${remaining} day(s).`);
+    }
+  }
+
+  if (!/^CP-\d{12}$/.test(newCpCode)) {
+    throw new Error('Invalid CP code format (must be CP-XXXXXXXXXXXX)');
+  }
+
+  const codeDoc = await getDoc(doc(db, 'cpCodes', newCpCode));
+  if (codeDoc.exists()) {
+    throw new Error('This CP code is already taken.');
+  }
+
+  await runTransaction(db, async (transaction) => {
+    const oldCodeDoc = doc(db, 'cpCodes', userData.cpCode);
+    transaction.delete(oldCodeDoc);
+
+    transaction.set(doc(db, 'cpCodes', newCpCode), {
+      uid: uid,
+      createdAt: new Date()
+    });
+
+    transaction.update(userRef, {
+      cpCode: newCpCode,
+      cpCodeLastChanged: new Date()
+    });
+  });
+
+  return newCpCode;
 }
 
 // ---------- Friend Requests ----------
@@ -167,13 +210,6 @@ export function listenRoomTyping(roomId, callback) {
     snapshot.forEach(d => uids.push(d.data().uid));
     callback(uids);
   });
-}
-
-// ---------- File Upload ----------
-export async function uploadFile(file, path) {
-  const fileRef = ref(storage, path);
-  await uploadBytes(fileRef, file);
-  return await getDownloadURL(fileRef);
 }
 
 // ---------- Room Helpers ----------
