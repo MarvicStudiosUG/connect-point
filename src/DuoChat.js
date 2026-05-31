@@ -13,14 +13,13 @@ import {
   declineFriendRequest,
   setChatTyping,
   listenChatTyping,
-  listenUserPresence,
-  uploadFile
+  listenUserPresence
 } from './db.js';
 import { useUser } from './UserContext.js';
 
 export default function DuoChat() {
   const currentUser = useUser();
-  const [view, setView] = useState('main'); // 'main', 'search', 'chat', 'requests'
+  const [view, setView] = useState('main');
   const [searchInput, setSearchInput] = useState('');
   const [foundUser, setFoundUser] = useState(null);
   const [searchError, setSearchError] = useState('');
@@ -31,33 +30,27 @@ export default function DuoChat() {
   const [friendPresence, setFriendPresence] = useState(null);
   const [friendRequests, setFriendRequests] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Friend requests listener
   useEffect(() => {
     const unsub = listenFriendRequests(currentUser.uid, setFriendRequests);
     return () => unsub();
   }, [currentUser.uid]);
 
-  // Typing listener
   useEffect(() => {
     if (!chatId) return;
     const unsub = listenChatTyping(chatId, setTypingUsers);
     return () => unsub();
   }, [chatId]);
 
-  // Friend presence
   useEffect(() => {
     if (!chatId || !foundUser) return;
     const unsub = listenUserPresence(foundUser.uid, setFriendPresence);
     return () => unsub();
   }, [chatId, foundUser]);
 
-  // Messages listener
   useEffect(() => {
     if (!chatId) return;
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
@@ -139,32 +132,11 @@ export default function DuoChat() {
     setNewMessage('');
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const path = `chat-files/${chatId}/${Date.now()}_${file.name}`;
-      const url = await uploadFile(file, path);
-      await addDoc(collection(db, 'chats', chatId, 'messages'), {
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || currentUser.email,
-        text: `📎 ${file.name}`,
-        fileUrl: url,
-        timestamp: serverTimestamp(),
-      });
-    } catch (err) {
-      alert('Upload failed: ' + err.message);
-    }
-    setUploading(false);
-    e.target.value = '';
-  };
-
   const handleTyping = (isTyping) => {
     if (chatId) setChatTyping(chatId, currentUser.uid, isTyping);
   };
 
-  // ---------- Render Views ----------
+  // ---------- Views ----------
   const MainView = () => {
     const [friends, setFriends] = useState([]);
     useEffect(() => {
@@ -276,7 +248,7 @@ export default function DuoChat() {
       React.createElement('div', { className: 'chat-messages' },
         messages.map(msg =>
           React.createElement('div', { key: msg.id, className: `chat-bubble ${msg.senderId === currentUser.uid ? 'own' : 'other'}` },
-            msg.fileUrl ? React.createElement('a', { href: msg.fileUrl, target: '_blank' }, msg.text) : React.createElement('div', { className: 'bubble-text' }, msg.text),
+            React.createElement('div', { className: 'bubble-text' }, msg.text),
             React.createElement('div', { className: 'bubble-time' },
               msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
             )
@@ -285,9 +257,6 @@ export default function DuoChat() {
         React.createElement('div', { ref: messagesEndRef })
       ),
       React.createElement('form', { className: 'chat-input-area', onSubmit: sendMessage },
-        React.createElement('input', { type: 'file', ref: fileInputRef, style: { display: 'none' }, onChange: handleFileUpload }),
-        React.createElement('button', { type: 'button', className: 'btn-icon', onClick: () => fileInputRef.current.click(), disabled: uploading },
-          React.createElement('i', { className: 'ph ph-paperclip' })),
         React.createElement('input', { className: 'input-field', type: 'text', value: newMessage, onChange: e => setNewMessage(e.target.value), placeholder: 'Type a message...', onFocus: () => handleTyping(true), onBlur: () => handleTyping(false) }),
         React.createElement('button', { type: 'submit', className: 'btn btn-primary' },
           React.createElement('i', { className: 'ph ph-paper-plane-right' }))
@@ -301,4 +270,4 @@ export default function DuoChat() {
     case 'chat': return ChatView();
     default: return MainView();
   }
-                                       }
+          }
