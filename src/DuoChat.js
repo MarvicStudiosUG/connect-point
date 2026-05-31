@@ -33,19 +33,19 @@ export default function DuoChat() {
   const [friends, setFriends] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Scroll to bottom when messages update
+  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Friend requests listener (only when UID is known)
+  // Friend requests listener
   useEffect(() => {
     if (!currentUser?.uid) return;
     const unsub = listenFriendRequests(currentUser.uid, setFriendRequests);
     return () => unsub();
   }, [currentUser?.uid]);
 
-  // Friends list (chats where current user is a participant)
+  // Friends list (all chats where currentUser is participant)
   useEffect(() => {
     if (!currentUser?.uid) return;
     const q = query(
@@ -64,7 +64,7 @@ export default function DuoChat() {
     return () => unsub();
   }, [currentUser?.uid]);
 
-  // Typing listener for the active chat
+  // Typing listener for active chat
   useEffect(() => {
     if (!chatId) return;
     const unsub = listenChatTyping(chatId, setTypingUsers);
@@ -91,6 +91,9 @@ export default function DuoChat() {
     });
     return () => unsub();
   }, [chatId]);
+
+  // Check if a user ID is already a friend
+  const isFriend = (uid) => friends.some((f) => f.friendId === uid);
 
   const handleSearch = async () => {
     const code = searchInput.trim().toUpperCase();
@@ -161,13 +164,15 @@ export default function DuoChat() {
       timestamp: serverTimestamp(),
     });
     setNewMessage('');
+    // Clear typing after sending
+    handleTyping(false);
   };
 
   const handleTyping = (isTyping) => {
     if (chatId) setChatTyping(chatId, currentUser.uid, isTyping);
   };
 
-  // ---------- Sub-components (pure, no hooks issues now) ----------
+  // ---------- Sub-component: FriendCard ----------
   const FriendCard = ({ friendId }) => {
     const [friendProfile, setFriendProfile] = useState(null);
     useEffect(() => {
@@ -184,6 +189,31 @@ export default function DuoChat() {
         friendProfile.online && React.createElement('span', { className: 'online-dot' })
       ),
       React.createElement('div', { className: 'room-code' }, friendProfile.cpCode)
+    );
+  };
+
+  // ---------- Sub-component: RequestCard (shows sender's name) ----------
+  const RequestCard = ({ req }) => {
+    const [sender, setSender] = useState(null);
+    useEffect(() => {
+      getUserProfile(req.from).then(setSender);
+    }, [req.from]);
+
+    if (!sender) {
+      return React.createElement('div', { className: 'room-card glass', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+        React.createElement('div', null, React.createElement('strong', null, 'Loading...'))
+      );
+    }
+
+    return React.createElement('div', { className: 'room-card glass', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px' } },
+      React.createElement('div', { style: { overflow: 'hidden', flex: 1 } },
+        React.createElement('strong', null, sender.displayName || sender.email),
+        React.createElement('div', { style: { fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, sender.cpCode)
+      ),
+      React.createElement('div', { style: { display: 'flex', gap: '8px', marginLeft: '12px', flexShrink: 0 } },
+        React.createElement('button', { className: 'btn btn-primary', onClick: () => handleAcceptRequest(req.id), style: { padding: '8px 16px' } }, 'Accept'),
+        React.createElement('button', { className: 'btn', onClick: () => handleDeclineRequest(req.id), style: { padding: '8px 16px' } }, 'Decline')
+      )
     );
   };
 
@@ -209,8 +239,10 @@ export default function DuoChat() {
       )
     );
 
-  const renderSearchView = () =>
-    React.createElement('div', { className: 'duo-container' },
+  const renderSearchView = () => {
+    const alreadyFriend = foundUser ? isFriend(foundUser.uid) : false;
+
+    return React.createElement('div', { className: 'duo-container' },
       React.createElement('div', { className: 'glass', style: { padding: '1.5rem' } },
         React.createElement('button', { className: 'btn-icon', onClick: () => setView('main') },
           React.createElement('i', { className: 'ph ph-arrow-left' })),
@@ -226,31 +258,25 @@ export default function DuoChat() {
             React.createElement('strong', null, foundUser.displayName || foundUser.email),
             React.createElement('div', { style: { fontSize: '0.8rem', color: 'var(--text-secondary)' } }, foundUser.cpCode)
           ),
-          React.createElement('button', { className: 'btn btn-primary', onClick: handleSendRequest }, 'Add Friend')
+          alreadyFriend
+            ? React.createElement('button', { className: 'btn btn-primary', onClick: () => openChat(foundUser.uid) }, 'Message')
+            : React.createElement('button', { className: 'btn btn-primary', onClick: handleSendRequest }, 'Add Friend')
         )
       )
     );
+  };
 
   const renderRequestsView = () =>
     React.createElement('div', { className: 'duo-container' },
       React.createElement('div', { className: 'glass', style: { padding: '1.5rem' } },
         React.createElement('button', { className: 'btn-icon', onClick: () => setView('main') },
           React.createElement('i', { className: 'ph ph-arrow-left' })),
-        React.createElement('h2', null, 'Friend Requests'),
+        React.createElement('h2', { style: { marginBottom: '1rem' } }, 'Friend Requests'),
         friendRequests.length === 0
           ? React.createElement('p', { className: 'text-secondary' }, 'No pending requests')
           : React.createElement('div', { className: 'rooms-grid' },
               friendRequests.map((req) =>
-                React.createElement('div', { key: req.id, className: 'room-card glass', style: { display: 'flex', justifyContent: 'space-between' } },
-                  React.createElement('div', null,
-                    React.createElement('strong', null, req.from),
-                    React.createElement('div', { style: { fontSize: '0.8rem' } }, 'wants to be friends')
-                  ),
-                  React.createElement('div', { style: { display: 'flex', gap: '8px' } },
-                    React.createElement('button', { className: 'btn btn-primary', onClick: () => handleAcceptRequest(req.id) }, 'Accept'),
-                    React.createElement('button', { className: 'btn', onClick: () => handleDeclineRequest(req.id) }, 'Decline')
-                  )
-                )
+                React.createElement(RequestCard, { key: req.id, req })
               )
             )
       )
@@ -296,4 +322,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-      }
+                               }
