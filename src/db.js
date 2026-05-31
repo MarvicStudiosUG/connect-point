@@ -43,7 +43,8 @@ export async function createUserProfile(user) {
     cpCode,
     createdAt: new Date(),
     online: true,
-    lastSeen: new Date()
+    lastSeen: new Date(),
+    status: '', // custom status/bio
   };
   await setDoc(userDocRef, userData);
   return userData;
@@ -60,7 +61,7 @@ export async function getUserByCpCode(cpCode) {
   return getUserProfile(codeSnap.data().uid);
 }
 
-// ---------- Change CP Code (once per month) – now expects CP- plus 10 digits ----------
+// ---------- Change CP Code (once per month) ----------
 export async function changeUserCpCode(uid, newCpCode) {
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
@@ -77,7 +78,6 @@ export async function changeUserCpCode(uid, newCpCode) {
     }
   }
 
-  // Validate format: CP- followed by exactly 10 digits
   if (!/^CP-\d{10}$/.test(newCpCode)) {
     throw new Error('Invalid CP code format (must be CP-XXXXXXXXXX)');
   }
@@ -168,6 +168,22 @@ export function listenFriendRequests(uid, callback) {
     snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
     callback(requests);
   });
+}
+
+// ---------- Unfriend ----------
+export async function unfriend(uid1, uid2) {
+  const ids = [uid1, uid2].sort();
+  const chatId = `${ids[0]}_${ids[1]}`;
+  await deleteDoc(doc(db, 'chats', chatId));
+  // Also delete any pending friend requests between them
+  const requests = await getDocs(query(
+    collection(db, 'friendRequests'),
+    where('from', 'in', [uid1, uid2]),
+    where('to', 'in', [uid1, uid2])
+  ));
+  for (const req of requests.docs) {
+    await deleteDoc(req.ref);
+  }
 }
 
 // ---------- Online Presence ----------
@@ -306,16 +322,45 @@ export async function deleteRoom(roomId) {
   await deleteDoc(doc(db, 'rooms', roomId));
 }
 
-// ---------- Message Reactions ----------
-export async function addReaction(messagePath, uid, emoji) {
+// ---------- Message Reactions (now use strings like "like","love","laugh") ----------
+export async function addReaction(messagePath, uid, reactionType) {
   const ref = doc(db, messagePath);
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
   const reactions = snap.data().reactions || {};
-  const users = reactions[emoji] || [];
-  if (!users.includes(uid)) users.push(uid);
-  reactions[emoji] = users;
-  await updateDoc(ref, { reactions });
+  if (!reactions[reactionType]) reactions[reactionType] = [];
+  if (!reactions[reactionType].includes(uid)) {
+    reactions[reactionType].push(uid);
+    await updateDoc(ref, { reactions });
+  }
+}
+
+// ---------- Delete Message ----------
+export async function deleteMessage(path, uid) {
+  const ref = doc(db, path);
+  const snap = await getDoc(ref);
+  if (snap.exists() && snap.data().senderId === uid) {
+    await deleteDoc(ref);
+  }
+}
+
+// ---------- User search by name (basic prefix search) ----------
+export async function searchUsersByName(queryText, currentUid) {
+  if (!queryText || queryText.length < 2) return [];
+  // Firestore doesn't support full-text search; we'll do a prefix query on displayName
+  const q = query(
+    collection(db, 'users'),
+    where('displayName', '>=', queryText),
+    where('displayName', '<=', queryText + '\uf8ff')
+  );
+  const snapshot = await getDocs(q);
+  const results = [];
+  snapshot.forEach(d => {
+    if (d.id !== currentUid) {
+      results.push({ uid: d.id, ...d.data() });
+    }
+  });
+  return results;
 }
 
 // Re-export db
