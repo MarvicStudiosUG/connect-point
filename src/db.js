@@ -63,12 +63,8 @@ export async function getUserByCpCode(cpCode) {
 }
 
 // ---------- Room helpers ----------
-
-/**
- * Generates a 5‑character room code like "RC-0RW33"
- */
 function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'RC-';
   for (let i = 0; i < 5; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -76,15 +72,11 @@ function generateRoomCode() {
   return code;
 }
 
-/**
- * Create a new room
- */
 export async function createRoom({ name, description, isPublic, password }) {
   const auth = (await import('firebase/auth')).getAuth();
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
 
-  // Generate unique room code
   let roomCode = null;
   for (let attempt = 0; attempt < 10; attempt++) {
     roomCode = generateRoomCode();
@@ -97,7 +89,7 @@ export async function createRoom({ name, description, isPublic, password }) {
     name,
     description: description || '',
     isPublic: !!isPublic,
-    passwordHash: password ? await hashPassword(password) : null,
+    passwordHash: password ? btoa(password) : null,
     adminUID: user.uid,
     members: [user.uid],
     roomCode,
@@ -106,28 +98,11 @@ export async function createRoom({ name, description, isPublic, password }) {
 
   const roomRef = doc(collection(db, 'rooms'));
   await setDoc(roomRef, roomData);
-  // Reserve the room code
   await setDoc(doc(db, 'roomCodes', roomCode), { roomId: roomRef.id });
 
   return { id: roomRef.id, ...roomData };
 }
 
-/**
- * Simple password hash (not cryptographically secure – we will later use Cloudflare Worker for real hashing)
- * For now we store the password as plaintext (which is NOT safe). In production, use Firebase Functions.
- */
-async function hashPassword(password) {
-  // Simple base64 encode to avoid plaintext – still reversible, but a placeholder.
-  return btoa(password);
-}
-
-async function verifyPassword(password, hash) {
-  return btoa(password) === hash;
-}
-
-/**
- * Join a room by code, optionally with password
- */
 export async function joinRoomByCode(roomCode, password = '') {
   const auth = (await import('firebase/auth')).getAuth();
   const user = auth.currentUser;
@@ -142,52 +117,36 @@ export async function joinRoomByCode(roomCode, password = '') {
   if (!roomSnap.exists()) throw new Error('Room does not exist');
 
   const roomData = roomSnap.data();
-
-  // Already a member?
   if (roomData.members.includes(user.uid)) {
     return { id: roomId, ...roomData };
   }
 
-  // If private, check password
   if (!roomData.isPublic) {
     if (!password) throw new Error('Password required');
-    const valid = await verifyPassword(password, roomData.passwordHash);
+    const valid = btoa(password) === roomData.passwordHash;
     if (!valid) throw new Error('Incorrect password');
   }
 
-  // Add member
-  await updateDoc(roomRef, {
-    members: arrayUnion(user.uid)
-  });
-
+  await updateDoc(roomRef, { members: arrayUnion(user.uid) });
   return { id: roomId, ...roomData, members: [...roomData.members, user.uid] };
 }
 
-/**
- * Fetch rooms the user belongs to
- */
 export async function getUserRooms(uid) {
   const q = query(collection(db, 'rooms'), where('members', 'array-contains', uid));
   const snapshot = await getDocs(q);
   const rooms = [];
-  snapshot.forEach(doc => rooms.push({ id: doc.id, ...doc.data() }));
+  snapshot.forEach(d => rooms.push({ id: d.id, ...d.data() }));
   return rooms;
 }
 
-/**
- * Fetch public rooms
- */
 export async function getPublicRooms() {
   const q = query(collection(db, 'rooms'), where('isPublic', '==', true));
   const snapshot = await getDocs(q);
   const rooms = [];
-  snapshot.forEach(doc => rooms.push({ id: doc.id, ...doc.data() }));
+  snapshot.forEach(d => rooms.push({ id: d.id, ...d.data() }));
   return rooms;
 }
 
-/**
- * Search rooms by name (prefix match) – basic client‑side filter on all public rooms
- */
 export async function searchRoomsByName(queryText) {
   const publicRooms = await getPublicRooms();
   if (!queryText) return publicRooms;
@@ -195,29 +154,20 @@ export async function searchRoomsByName(queryText) {
   return publicRooms.filter(r => r.name.toLowerCase().includes(lower));
 }
 
-/**
- * Update room info (admin only)
- */
 export async function updateRoom(roomId, updates) {
   const roomRef = doc(db, 'rooms', roomId);
   await updateDoc(roomRef, updates);
 }
 
-/**
- * Remove a member (admin or self)
- */
 export async function removeMember(roomId, uid) {
   const roomRef = doc(db, 'rooms', roomId);
-  await updateDoc(roomRef, {
-    members: arrayRemove(uid)
-  });
+  await updateDoc(roomRef, { members: arrayRemove(uid) });
 }
 
-/**
- * Delete room entirely (admin only)
- */
 export async function deleteRoom(roomId) {
   const roomRef = doc(db, 'rooms', roomId);
   await deleteDoc(roomRef);
-  // Also delete messages subcollection manually (optional)
 }
+
+// ⬇️ ADD THIS EXPORT – it allows DuoChat and Rooms to import db directly
+export { db };
