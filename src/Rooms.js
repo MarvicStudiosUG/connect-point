@@ -1,30 +1,44 @@
-import React from 'react';
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
-  addDoc, serverTimestamp, doc
+  addDoc, serverTimestamp, doc, getDocs, where, updateDoc
 } from 'firebase/firestore';
-import { db, createRoom, joinRoomByCode, getUserRooms, getPublicRooms, updateRoom, removeMember, deleteRoom } from './db.js';
+import {
+  db,
+  createRoom,
+  joinRoomByCode,
+  getUserRooms,
+  getPublicRooms,
+  updateRoom,
+  removeMember,
+  deleteRoom,
+  setRoomTyping,
+  listenRoomTyping,
+  uploadFile,
+  addReaction
+} from './db.js';
 import { useUser } from './UserContext.js';
 
 export default function Rooms() {
   const currentUser = useUser();
-  const [view, setView] = useState('list'); // 'list', 'create', 'join', 'chat'
+  const [view, setView] = useState('list');
   const [rooms, setRooms] = useState([]);
   const [publicRooms, setPublicRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const [createForm, setCreateForm] = useState({ name: '', description: '', isPublic: true, password: '' });
   const [createError, setCreateError] = useState('');
-
   const [joinCode, setJoinCode] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
   const [joinError, setJoinError] = useState('');
-
   const [showAdmin, setShowAdmin] = useState(false);
+  const [searchRoomName, setSearchRoomName] = useState('');
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -45,53 +59,44 @@ export default function Rooms() {
   useEffect(() => {
     if (!selectedRoom) return;
     const q = query(collection(db, 'rooms', selectedRoom.id, 'messages'), orderBy('timestamp', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(q, snapshot => {
       const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
-    return () => unsubscribe();
+    return () => unsub();
+  }, [selectedRoom]);
+
+  useEffect(() => {
+    if (!selectedRoom) return;
+    const unsub = listenRoomTyping(selectedRoom.id, setTypingUsers);
+    return () => unsub();
   }, [selectedRoom]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
     setCreateError('');
-    if (!createForm.name.trim()) {
-      setCreateError('Room name is required');
-      return;
-    }
+    if (!createForm.name.trim()) { setCreateError('Room name required'); return; }
     try {
-      const room = await createRoom({
-        name: createForm.name,
-        description: createForm.description,
-        isPublic: createForm.isPublic,
-        password: createForm.password || null
-      });
-      setRooms(prev => [room, ...prev]);
+      await createRoom(createForm);
+      loadRooms();
       setView('list');
       setCreateForm({ name: '', description: '', isPublic: true, password: '' });
-    } catch (err) {
-      setCreateError(err.message);
-    }
+    } catch (err) { setCreateError(err.message); }
   };
 
   const handleJoin = async (e) => {
     e.preventDefault();
     setJoinError('');
     const code = joinCode.trim().toUpperCase();
-    if (!code.startsWith('RC-') || code.length !== 8) {
-      setJoinError('Invalid room code format (e.g., RC-0RW33)');
-      return;
-    }
+    if (!code.startsWith('RC-') || code.length !== 8) { setJoinError('Invalid room code'); return; }
     try {
-      const room = await joinRoomByCode(code, joinPassword);
-      setRooms(prev => { const exists = prev.find(r => r.id === room.id); return exists ? prev : [room, ...prev]; });
+      await joinRoomByCode(code, joinPassword);
+      loadRooms();
       setView('list');
       setJoinCode('');
       setJoinPassword('');
-    } catch (err) {
-      setJoinError(err.message);
-    }
+    } catch (err) { setJoinError(err.message); }
   };
 
   const enterRoom = (room) => {
@@ -110,6 +115,35 @@ export default function Rooms() {
       timestamp: serverTimestamp(),
     });
     setNewMessage('');
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !selectedRoom) return;
+    setUploading(true);
+    try {
+      const path = `room-files/${selectedRoom.id}/${Date.now()}_${file.name}`;
+      const url = await uploadFile(file, path);
+      await addDoc(collection(db, 'rooms', selectedRoom.id, 'messages'), {
+        senderId: currentUser.uid,
+        senderName: currentUser.displayName || currentUser.email,
+        text: `📎 ${file.name}`,
+        fileUrl: url,
+        timestamp: serverTimestamp(),
+      });
+    } catch (err) { alert('Upload failed'); }
+    setUploading(false);
+    e.target.value = '';
+  };
+
+  const handleReaction = async (msgId, emoji) => {
+    if (!selectedRoom) return;
+    const path = `rooms/${selectedRoom.id}/messages/${msgId}`;
+    await addReaction(path, currentUser.uid, emoji);
+  };
+
+  const handleTyping = (isTyping) => {
+    if (selectedRoom) setRoomTyping(selectedRoom.id, currentUser.uid, isTyping);
   };
 
   const handleAdminAction = async (action, payload) => {
@@ -141,7 +175,16 @@ export default function Rooms() {
     }
   };
 
-  // ---------- RENDER HELPERS ----------
+  const searchPublicRooms = async () => {
+    if (!searchRoomName.trim()) return loadRooms();
+    const q = query(collection(db, 'rooms'), where('isPublic', '==', true), where('name', '>=', searchRoomName.trim()), where('name', '<=', searchRoomName.trim() + '\uf8ff'));
+    const snapshot = await getDocs(q);
+    const results = [];
+    snapshot.forEach(d => results.push({ id: d.id, ...d.data() }));
+    setPublicRooms(results);
+  };
+
+  // Render helpers
   const renderList = () => React.createElement('div', { className: 'rooms-container' },
     React.createElement('div', { className: 'rooms-header' },
       React.createElement('h2', null, 'Rooms'),
@@ -151,6 +194,9 @@ export default function Rooms() {
         React.createElement('button', { className: 'btn', onClick: () => setView('join') },
           React.createElement('i', { className: 'ph ph-sign-in' }), ' Join')
       )
+    ),
+    React.createElement('div', { className: 'search-bar' },
+      React.createElement('input', { className: 'input-field', type: 'text', placeholder: 'Search public rooms...', value: searchRoomName, onChange: e => setSearchRoomName(e.target.value), onKeyDown: e => e.key === 'Enter' && searchPublicRooms() })
     ),
     React.createElement('h3', { className: 'rooms-section-title' }, 'Your Rooms'),
     rooms.length === 0 ? React.createElement('p', { className: 'text-secondary' }, "You haven't joined any rooms yet.") :
@@ -269,14 +315,18 @@ export default function Rooms() {
         React.createElement('i', { className: 'ph ph-dots-three-vertical' }))
     );
 
-    const messageElements = messages.map(msg =>
-      React.createElement('div', { key: msg.id, className: `chat-bubble ${msg.senderId === currentUser.uid ? 'own' : 'other'}` },
-        React.createElement('div', { className: 'bubble-text' }, msg.text),
+    const messageElements = messages.map(msg => {
+      const reactions = msg.reactions || {};
+      return React.createElement('div', { key: msg.id, className: `chat-bubble ${msg.senderId === currentUser.uid ? 'own' : 'other'}` },
+        msg.fileUrl ? React.createElement('a', { href: msg.fileUrl, target: '_blank' }, msg.text) : React.createElement('div', { className: 'bubble-text' }, msg.text),
+        Object.keys(reactions).length > 0 && React.createElement('div', { className: 'reactions-bar' },
+          Object.entries(reactions).map(([emoji, users]) => React.createElement('span', { key: emoji, className: 'reaction-emoji', onClick: () => handleReaction(msg.id, emoji) }, `${emoji} ${users.length}`))
+        ),
         React.createElement('div', { className: 'bubble-time' },
           msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
         )
-      )
-    );
+      );
+    });
 
     const messagesArea = React.createElement('div', { className: 'chat-messages' },
       ...messageElements,
@@ -284,7 +334,10 @@ export default function Rooms() {
     );
 
     const inputArea = React.createElement('form', { className: 'chat-input-area', onSubmit: sendMessage },
-      React.createElement('input', { className: 'input-field', type: 'text', value: newMessage, onChange: e => setNewMessage(e.target.value), placeholder: 'Type a message...' }),
+      React.createElement('input', { type: 'file', ref: fileInputRef, style: { display: 'none' }, onChange: handleFileUpload }),
+      React.createElement('button', { type: 'button', className: 'btn-icon', onClick: () => fileInputRef.current.click(), disabled: uploading },
+        React.createElement('i', { className: 'ph ph-paperclip' })),
+      React.createElement('input', { className: 'input-field', type: 'text', value: newMessage, onChange: e => setNewMessage(e.target.value), placeholder: 'Type a message...', onFocus: () => handleTyping(true), onBlur: () => handleTyping(false) }),
       React.createElement('button', { type: 'submit', className: 'btn btn-primary' },
         React.createElement('i', { className: 'ph ph-paper-plane-right' }))
     );
@@ -292,6 +345,7 @@ export default function Rooms() {
     return React.createElement('div', { className: 'duo-container chat-active' },
       chatHeader,
       adminPanel,
+      typingUsers.length > 0 && React.createElement('div', { style: { fontStyle: 'italic', padding: '4px 16px', color: 'var(--text-secondary)' } }, 'Typing...'),
       messagesArea,
       inputArea
     );
@@ -303,4 +357,4 @@ export default function Rooms() {
     case 'chat': return renderChat();
     default: return renderList();
   }
-                          }
+      }
