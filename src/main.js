@@ -1,3 +1,4 @@
+import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
