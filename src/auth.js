@@ -1,5 +1,4 @@
-import React from 'react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -57,7 +56,6 @@ export default function Auth({ onLogin }) {
     setLoading(false);
   };
 
-  // Build form fields
   const errorDiv = error ? React.createElement('div', {
     className: `fade-in ${error.startsWith('✅') ? 'success' : ''}`,
     style: {
@@ -141,4 +139,4 @@ export default function Auth({ onLogin }) {
       switchLinks
     )
   );
-    }
+                        }
