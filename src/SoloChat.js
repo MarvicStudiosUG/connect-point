@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useUser } from './UserContext.js';
+import { MOVIE_API_KEY } from './config.js';
 
 export default function SoloChat() {
-  const currentUser = useUser();   // <-- get logged‑in user
+  const currentUser = useUser();
   const [history, setHistory] = useState(() => {
     const saved = localStorage.getItem('cp-terminal-history');
     return saved ? JSON.parse(saved) : [
@@ -30,14 +31,13 @@ export default function SoloChat() {
   const allCommands = [
     'help', 'clear', 'time', 'date', 'echo', 'whoami', 'version', 'calc',
     'weather', 'define', 'crypto', 'joke', 'news', 'qr', 'ip', 'fact',
-    'randomuser', 'timezone', 'alias', 'unalias', 'aliases', 'quote',
+    'randomuser', 'timezone', 'currency', 'lyrics', 'movie',
+    'alias', 'unalias', 'aliases', 'quote',
     ...Object.keys(aliases)
   ];
 
-  // The user‑friendly name shown in the prompt
   const userName = currentUser?.displayName || currentUser?.email || 'guest';
 
-  // Persist history
   useEffect(() => {
     localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-100)));
   }, [history]);
@@ -67,17 +67,16 @@ export default function SoloChat() {
     ]);
   };
 
-  // Format response text with a timestamp
   const formatResponse = (text) => {
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${text}\n⏱ ${now}`;
+    return `${text}\n  -- ${now}`;
   };
 
   const executeCommand = useCallback(async (cmd) => {
     const trimmedCmd = cmd.trim();
     if (!trimmedCmd) return;
 
-    const newHistory = [...history, { type: 'command', text: '→ ' + trimmedCmd }];
+    const newHistory = [...history, { type: 'command', text: '> ' + trimmedCmd }];
     setCommandHistory(prev => [...prev, trimmedCmd]);
     setHistoryIndex(-1);
     setSuggestions([]);
@@ -106,10 +105,10 @@ export default function SoloChat() {
     if (showClearConfirm) setShowClearConfirm(false);
 
     // Cloud commands
-    const cloudCmds = ['weather','define','crypto','joke','news','qr','ip','fact','randomuser','timezone'];
+    const cloudCmds = ['weather','define','crypto','joke','news','qr','ip','fact','randomuser','timezone','currency','lyrics','movie'];
     if (cloudCmds.includes(mainCmd)) {
       setLoading(true);
-      setHistory([...newHistory, { type: 'response', text: '⏳ Fetching...' }]);
+      setHistory([...newHistory, { type: 'response', text: 'Fetching...' }]);
       setInput('');
       try {
         let result = '';
@@ -120,7 +119,7 @@ export default function SoloChat() {
               const city = args.join(' ');
               const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%w`);
               if (!res.ok) throw new Error('City not found');
-              result = `🌤 ${city}: ${(await res.text()).trim()}`;
+              result = `Weather in ${city}: ${(await res.text()).trim()}`;
             }
             break;
           case 'define':
@@ -134,7 +133,7 @@ export default function SoloChat() {
               e.meanings.slice(0,2).forEach(m => {
                 defs += `  ${m.partOfSpeech}: ${m.definitions[0].definition}\n`;
               });
-              result = `📚 ${e.word}\n${defs.trim()}`;
+              result = `Definition: ${e.word}\n${defs.trim()}`;
             }
             break;
           case 'crypto':
@@ -144,7 +143,7 @@ export default function SoloChat() {
               if (!res.ok) throw new Error('Coin not found');
               const data = await res.json();
               if (!data[args[0]]) throw new Error('Coin not found');
-              result = `💰 ${args[0].toUpperCase()}: $${data[args[0]].usd}`;
+              result = `Price: ${args[0].toUpperCase()} = $${data[args[0]].usd}`;
             }
             break;
           case 'joke':
@@ -152,7 +151,7 @@ export default function SoloChat() {
               const res = await fetchWithTimeout('https://official-joke-api.appspot.com/random_joke');
               if (!res.ok) throw new Error('Joke fetch failed');
               const d = await res.json();
-              result = `😂 ${d.setup}\n   ${d.punchline}`;
+              result = `${d.setup}\n   ${d.punchline}`;
             }
             break;
           case 'news':
@@ -161,27 +160,27 @@ export default function SoloChat() {
               const text = await res.text();
               const items = text.match(/<title>(?!NPR Topics:)([^<]+)<\/title>/g);
               if (items && items.length > 0) {
-                result = '📰 Latest from NPR:\n';
+                result = 'Latest from NPR:\n';
                 items.slice(0,5).forEach((t,i) => result += `${i+1}. ${t.replace(/<[^>]+>/g,'')}\n`);
               } else result = 'No news found.';
             } catch { result = 'News feed unavailable.'; }
             break;
           case 'qr':
             if (!args[0]) result = 'Usage: qr <text or url>';
-            else result = `📱 QR: https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(args.join(' '))}`;
+            else result = `QR Code: https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(args.join(' '))}`;
             break;
           case 'ip':
             {
               const res = await fetchWithTimeout('https://api.ipify.org?format=json');
               const data = await res.json();
-              result = `🌐 Your IP: ${data.ip}`;
+              result = `Your IP: ${data.ip}`;
             }
             break;
           case 'fact':
             {
               const res = await fetchWithTimeout('https://uselessfacts.jsph.pl/random.json?language=en');
               const data = await res.json();
-              result = `💡 ${data.text}`;
+              result = `${data.text}`;
             }
             break;
           case 'randomuser':
@@ -189,7 +188,7 @@ export default function SoloChat() {
               const res = await fetchWithTimeout('https://randomuser.me/api/');
               const data = await res.json();
               const u = data.results[0];
-              result = `👤 ${u.name.first} ${u.name.last}\n   ${u.email}`;
+              result = `${u.name.first} ${u.name.last}\n   ${u.email}`;
             }
             break;
           case 'timezone':
@@ -198,7 +197,41 @@ export default function SoloChat() {
               const res = await fetchWithTimeout(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(args[0])}`);
               if (!res.ok) throw new Error('Invalid timezone');
               const data = await res.json();
-              result = `🕒 ${data.timezone}: ${data.datetime.split('T')[1].split('.')[0]}`;
+              result = `Timezone: ${data.timezone} - ${data.datetime.split('T')[1].split('.')[0]}`;
+            }
+            break;
+          case 'currency':
+            if (args.length < 3) result = 'Usage: currency <amount> <from> <to> (e.g., currency 100 USD EUR)';
+            else {
+              const amount = args[0];
+              const from = args[1].toUpperCase();
+              const to = args[2].toUpperCase();
+              const res = await fetchWithTimeout(`https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`);
+              if (!res.ok) throw new Error('Conversion failed');
+              const data = await res.json();
+              result = `${amount} ${from} = ${data.result} ${to}`;
+            }
+            break;
+          case 'lyrics':
+            if (args.length < 2) result = 'Usage: lyrics <artist> <song>';
+            else {
+              const artist = args[0];
+              const song = args.slice(1).join(' ');
+              const res = await fetchWithTimeout(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(song)}`);
+              if (!res.ok) throw new Error('Lyrics not found');
+              const data = await res.json();
+              result = data.lyrics || 'No lyrics found.';
+            }
+            break;
+          case 'movie':
+            if (!args[0]) result = 'Usage: movie <title>';
+            else {
+              const apiKey = MOVIE_API_KEY || 'trilogy'; // 'trilogy' is a public test key from OMDb
+              const res = await fetchWithTimeout(`https://www.omdbapi.com/?t=${encodeURIComponent(args.join(' '))}&apikey=${apiKey}`);
+              if (!res.ok) throw new Error('Movie not found');
+              const data = await res.json();
+              if (data.Error) throw new Error(data.Error);
+              result = `${data.Title} (${data.Year})\nRating: ${data.imdbRating}\nPlot: ${data.Plot}`;
             }
             break;
         }
@@ -215,14 +248,16 @@ export default function SoloChat() {
     let isError = false;
     switch (mainCmd) {
       case 'help':
-        response = `📋 Available Commands\n\n` +
-          `🔹 General:\n  help, clear, time, date, echo, whoami, version\n\n` +
-          `🔹 Internet:\n  weather <city>, define <word>, crypto <coin>, joke, news, qr <text>, ip\n` +
-          `🔹 Fun:\n  fact, randomuser, quote\n` +
-          `🔹 Math:\n  calc <expr>\n` +
-          `🔹 Time:\n  timezone <area/city>\n\n` +
-          `🔧 Aliases:\n  alias <short> <command> – set\n  unalias <short> – remove\n  aliases – list\n\n` +
-          `⌨️  Use Tab for autocomplete, ↑/↓ for history.`;
+        response = `Available Commands\n\n` +
+          `General: help, clear, time, date, echo, whoami, version\n\n` +
+          `Internet: weather <city>, define <word>, crypto <coin>, joke, news, qr <text>, ip\n` +
+          `Fun: fact, randomuser, quote\n` +
+          `Math: calc <expr>\n` +
+          `Time: timezone <area/city>\n` +
+          `Finance: currency <amount> <from> <to>\n` +
+          `Media: lyrics <artist> <song>, movie <title>\n\n` +
+          `Aliases: alias <short> <command>, unalias <short>, aliases\n\n` +
+          `Use Tab for autocomplete, Up/Down for history.`;
         break;
       case 'time':
         response = new Date().toLocaleTimeString();
@@ -237,7 +272,7 @@ export default function SoloChat() {
         response = userName;
         break;
       case 'version':
-        response = 'CP Terminal v2.1 – Enhanced Edition';
+        response = 'CP Terminal v2.2 – Professional Edition';
         break;
       case 'calc':
         try {
@@ -260,7 +295,7 @@ export default function SoloChat() {
           const short = args[0];
           const full = args.slice(1).join(' ');
           setAliases(prev => ({ ...prev, [short]: full }));
-          response = `Alias set: ${short} → ${full}`;
+          response = `Alias set: ${short} -> ${full}`;
         }
         break;
       case 'unalias':
@@ -273,7 +308,7 @@ export default function SoloChat() {
         break;
       case 'aliases':
         if (Object.keys(aliases).length === 0) response = 'No aliases set.';
-        else response = 'Aliases:\n' + Object.entries(aliases).map(([k,v]) => `  ${k} → ${v}`).join('\n');
+        else response = 'Aliases:\n' + Object.entries(aliases).map(([k,v]) => `  ${k} -> ${v}`).join('\n');
         break;
       default:
         response = `Command not found: ${mainCmd}. Type "help".`;
@@ -349,7 +384,6 @@ export default function SoloChat() {
     }
   };
 
-  // Render output lines with improved styling
   const outputElements = history.map((entry, idx) =>
     React.createElement('div', {
       key: idx,
@@ -389,7 +423,6 @@ export default function SoloChat() {
   );
 
   return React.createElement('div', { className: 'terminal', onClick: focusInput },
-    // Terminal header
     React.createElement('div', { className: 'terminal-header' },
       React.createElement('span', { className: 'terminal-title' }, 'CP Terminal'),
       React.createElement('button', {
@@ -399,7 +432,6 @@ export default function SoloChat() {
       }, React.createElement('i', { className: 'ph ph-broom' }))
     ),
 
-    // Output area
     React.createElement('div', { className: 'terminal-output', ref: outputRef },
       ...outputElements,
       inputLine,
@@ -407,7 +439,6 @@ export default function SoloChat() {
       suggestionList
     ),
 
-    // Input area with send button
     React.createElement('div', { className: 'terminal-input-area' },
       React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
       React.createElement('input', {
@@ -436,7 +467,6 @@ export default function SoloChat() {
       }, React.createElement('i', { className: 'ph ph-paper-plane-right' }))
     ),
 
-    // CSS animations inlined
     React.createElement('style', null, `
       @keyframes blink {
         0%, 100% { opacity: 1; }
@@ -452,4 +482,4 @@ export default function SoloChat() {
       }
     `)
   );
-}
+            }
