@@ -40,10 +40,10 @@
 <body>
   <div id="root"></div>
 
-  <!-- Install button (always visible after SW ready) -->
-  <div id="install-button-container" style="display:none; position:fixed; top:10px; right:10px; z-index:200;">
-    <button id="install-btn" class="btn btn-primary" style="padding:10px 16px; font-size:0.9rem; border-radius:20px;">
-      <i class="ph ph-download-simple"></i> Install
+  <!-- Install button (top‑left, does not overlap theme toggle) -->
+  <div id="install-button-container" style="display:none; position:fixed; top:20px; left:20px; z-index:200;">
+    <button id="install-btn" class="btn btn-primary" style="padding:10px 16px; font-size:0.9rem; border-radius:20px; background: var(--accent); color: white; border: none;">
+      <i class="ph ph-download-simple"></i> Install App
     </button>
   </div>
 
@@ -62,7 +62,9 @@
 
   <!-- Service Worker + Install logic -->
   <script>
-    let deferredPrompt;
+    // Global deferredPrompt so terminal command can access it
+    window.__cpDeferredPrompt = null;
+
     const installBtn = document.getElementById('install-btn');
     const installContainer = document.getElementById('install-button-container');
 
@@ -72,12 +74,11 @@
         navigator.serviceWorker.register('/sw.js')
           .then(() => {
             console.log('SW registered');
-            // Show install button after SW is active
             installContainer.style.display = 'block';
           })
           .catch((err) => {
-            console.warn('SW registration failed, but install may still work', err);
-            installContainer.style.display = 'block'; // show anyway
+            console.warn('SW registration failed', err);
+            installContainer.style.display = 'block'; // show button anyway
           });
       });
     }
@@ -85,20 +86,21 @@
     // Capture the native install prompt
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
-      deferredPrompt = e;
+      window.__cpDeferredPrompt = e;
+      installContainer.style.display = 'block';
     });
 
     // Install button click
     installBtn.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
+      if (window.__cpDeferredPrompt) {
+        window.__cpDeferredPrompt.prompt();
+        const { outcome } = await window.__cpDeferredPrompt.userChoice;
         console.log('Install outcome:', outcome);
-        deferredPrompt = null;
+        window.__cpDeferredPrompt = null;
         installContainer.style.display = 'none';
       } else {
-        // Fallback: show instruction
-        alert('To install the app, tap the browser menu (three dots) and select "Add to Home screen" or "Install".');
+        // Fallback instruction
+        alert('To install, tap the browser menu (⋮) and select "Add to Home screen" or "Install app".');
       }
     });
 
