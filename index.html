@@ -40,10 +40,10 @@
 <body>
   <div id="root"></div>
 
-  <!-- Install button (top‑left, does not overlap theme toggle) -->
-  <div id="install-button-container" style="display:none; position:fixed; top:20px; left:20px; z-index:200;">
-    <button id="install-btn" class="btn btn-primary" style="padding:10px 16px; font-size:0.9rem; border-radius:20px; background: var(--accent); color: white; border: none;">
-      <i class="ph ph-download-simple"></i> Install App
+  <!-- Install button (bottom‑left corner, small and unobtrusive) -->
+  <div id="install-button-container" style="display:none; position:fixed; bottom:80px; left:16px; z-index:200;">
+    <button id="install-btn" style="width:44px; height:44px; border-radius:50%; background: var(--accent); color: white; border: none; display:flex; align-items:center; justify-content:center; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor:pointer;">
+      <i class="ph ph-download-simple" style="font-size:1.4rem;"></i>
     </button>
   </div>
 
@@ -62,7 +62,6 @@
 
   <!-- Service Worker + Install logic -->
   <script>
-    // Global deferredPrompt so terminal command can access it
     window.__cpDeferredPrompt = null;
 
     const installBtn = document.getElementById('install-btn');
@@ -78,7 +77,7 @@
           })
           .catch((err) => {
             console.warn('SW registration failed', err);
-            installContainer.style.display = 'block'; // show button anyway
+            installContainer.style.display = 'block';
           });
       });
     }
@@ -97,14 +96,18 @@
         const { outcome } = await window.__cpDeferredPrompt.userChoice;
         console.log('Install outcome:', outcome);
         window.__cpDeferredPrompt = null;
-        installContainer.style.display = 'none';
+        if (outcome === 'accepted') installContainer.style.display = 'none';
       } else {
-        // Fallback instruction
-        alert('To install, tap the browser menu (⋮) and select "Add to Home screen" or "Install app".');
+        // Fallback instructions
+        const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+        if (isIOS) {
+          alert('Tap the Share button and then "Add to Home Screen".');
+        } else {
+          alert('Tap the browser menu (⋮) and select "Install app" or "Add to Home screen".');
+        }
       }
     });
 
-    // Hide button after installation
     window.addEventListener('appinstalled', () => {
       installContainer.style.display = 'none';
     });
