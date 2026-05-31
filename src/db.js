@@ -1,17 +1,16 @@
 import {
   doc, setDoc, getDoc, runTransaction,
   collection, addDoc, query, where, getDocs,
-  updateDoc, arrayUnion, arrayRemove, deleteDoc
+  updateDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, orderBy, serverTimestamp
 } from 'firebase/firestore';
-import { db } from './config.js';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from './config.js';
 
 // ---------- CP code generation ----------
 function generateCPCode() {
   const digits = '0123456789';
   let code = 'CP-';
-  for (let i = 0; i < 12; i++) {
-    code += digits.charAt(Math.floor(Math.random() * 10));
-  }
+  for (let i = 0; i < 12; i++) code += digits.charAt(Math.floor(Math.random() * 10));
   return code;
 }
 
@@ -44,8 +43,9 @@ export async function createUserProfile(user) {
     photoURL: user.photoURL || '',
     cpCode,
     createdAt: new Date(),
+    online: true,
+    lastSeen: new Date()
   };
-
   await setDoc(userDocRef, userData);
   return userData;
 }
@@ -58,17 +58,129 @@ export async function getUserProfile(uid) {
 export async function getUserByCpCode(cpCode) {
   const codeSnap = await getDoc(doc(db, 'cpCodes', cpCode));
   if (!codeSnap.exists()) return null;
-  const { uid } = codeSnap.data();
-  return getUserProfile(uid);
+  return getUserProfile(codeSnap.data().uid);
 }
 
-// ---------- Room helpers ----------
+// ---------- Friend Requests ----------
+export async function sendFriendRequest(fromUid, toCpCode) {
+  const toUser = await getUserByCpCode(toCpCode);
+  if (!toUser) throw new Error('User not found');
+  if (fromUid === toUser.uid) throw new Error('Cannot request yourself');
+
+  const ids = [fromUid, toUser.uid].sort();
+  const chatDoc = await getDoc(doc(db, 'chats', `${ids[0]}_${ids[1]}`));
+  if (chatDoc.exists()) throw new Error('Already friends');
+
+  const existing = await getDocs(query(
+    collection(db, 'friendRequests'),
+    where('from', '==', fromUid),
+    where('to', '==', toUser.uid),
+    where('status', '==', 'pending')
+  ));
+  if (!existing.empty) throw new Error('Request already sent');
+
+  await addDoc(collection(db, 'friendRequests'), {
+    from: fromUid,
+    to: toUser.uid,
+    status: 'pending',
+    createdAt: new Date()
+  });
+}
+
+export async function acceptFriendRequest(requestId, accepterUid) {
+  const requestRef = doc(db, 'friendRequests', requestId);
+  const snap = await getDoc(requestRef);
+  if (!snap.exists()) throw new Error('Request not found');
+  const data = snap.data();
+  if (data.to !== accepterUid) throw new Error('Not for you');
+  if (data.status !== 'pending') throw new Error('Already handled');
+
+  const ids = [data.from, data.to].sort();
+  const chatId = `${ids[0]}_${ids[1]}`;
+  await setDoc(doc(db, 'chats', chatId), {
+    participants: ids,
+    createdAt: new Date(),
+    lastMessage: ''
+  });
+  await updateDoc(requestRef, { status: 'accepted' });
+  return { chatId, friendId: data.from };
+}
+
+export async function declineFriendRequest(requestId, declinerUid) {
+  const requestRef = doc(db, 'friendRequests', requestId);
+  const snap = await getDoc(requestRef);
+  if (!snap.exists() || snap.data().to !== declinerUid) return;
+  await updateDoc(requestRef, { status: 'declined' });
+}
+
+export function listenFriendRequests(uid, callback) {
+  const q = query(
+    collection(db, 'friendRequests'),
+    where('to', '==', uid),
+    where('status', '==', 'pending')
+  );
+  return onSnapshot(q, snapshot => {
+    const requests = [];
+    snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+    callback(requests);
+  });
+}
+
+// ---------- Online Presence ----------
+export async function setUserOnline(uid, online) {
+  await updateDoc(doc(db, 'users', uid), {
+    online,
+    lastSeen: new Date()
+  });
+}
+
+export function listenUserPresence(uid, callback) {
+  return onSnapshot(doc(db, 'users', uid), snap => {
+    if (snap.exists()) callback(snap.data());
+  });
+}
+
+// ---------- Typing ----------
+export async function setChatTyping(chatId, uid, isTyping) {
+  const ref = doc(db, 'chats', chatId, 'typing', uid);
+  if (isTyping) await setDoc(ref, { uid, timestamp: new Date() });
+  else await deleteDoc(ref);
+}
+
+export function listenChatTyping(chatId, callback) {
+  return onSnapshot(collection(db, 'chats', chatId, 'typing'), snapshot => {
+    const uids = [];
+    snapshot.forEach(d => uids.push(d.data().uid));
+    callback(uids);
+  });
+}
+
+export async function setRoomTyping(roomId, uid, isTyping) {
+  const ref = doc(db, 'rooms', roomId, 'typing', uid);
+  if (isTyping) await setDoc(ref, { uid, timestamp: new Date() });
+  else await deleteDoc(ref);
+}
+
+export function listenRoomTyping(roomId, callback) {
+  return onSnapshot(collection(db, 'rooms', roomId, 'typing'), snapshot => {
+    const uids = [];
+    snapshot.forEach(d => uids.push(d.data().uid));
+    callback(uids);
+  });
+}
+
+// ---------- File Upload ----------
+export async function uploadFile(file, path) {
+  const fileRef = ref(storage, path);
+  await uploadBytes(fileRef, file);
+  return await getDownloadURL(fileRef);
+}
+
+// ---------- Room Helpers ----------
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'RC-';
-  for (let i = 0; i < 5; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   return code;
 }
 
@@ -99,7 +211,6 @@ export async function createRoom({ name, description, isPublic, password }) {
   const roomRef = doc(collection(db, 'rooms'));
   await setDoc(roomRef, roomData);
   await setDoc(doc(db, 'roomCodes', roomCode), { roomId: roomRef.id });
-
   return { id: roomRef.id, ...roomData };
 }
 
@@ -123,8 +234,7 @@ export async function joinRoomByCode(roomCode, password = '') {
 
   if (!roomData.isPublic) {
     if (!password) throw new Error('Password required');
-    const valid = btoa(password) === roomData.passwordHash;
-    if (!valid) throw new Error('Incorrect password');
+    if (btoa(password) !== roomData.passwordHash) throw new Error('Incorrect password');
   }
 
   await updateDoc(roomRef, { members: arrayUnion(user.uid) });
@@ -147,27 +257,29 @@ export async function getPublicRooms() {
   return rooms;
 }
 
-export async function searchRoomsByName(queryText) {
-  const publicRooms = await getPublicRooms();
-  if (!queryText) return publicRooms;
-  const lower = queryText.toLowerCase();
-  return publicRooms.filter(r => r.name.toLowerCase().includes(lower));
-}
-
 export async function updateRoom(roomId, updates) {
-  const roomRef = doc(db, 'rooms', roomId);
-  await updateDoc(roomRef, updates);
+  await updateDoc(doc(db, 'rooms', roomId), updates);
 }
 
 export async function removeMember(roomId, uid) {
-  const roomRef = doc(db, 'rooms', roomId);
-  await updateDoc(roomRef, { members: arrayRemove(uid) });
+  await updateDoc(doc(db, 'rooms', roomId), { members: arrayRemove(uid) });
 }
 
 export async function deleteRoom(roomId) {
-  const roomRef = doc(db, 'rooms', roomId);
-  await deleteDoc(roomRef);
+  await deleteDoc(doc(db, 'rooms', roomId));
 }
 
-// ⬇️ ADD THIS EXPORT – it allows DuoChat and Rooms to import db directly
+// ---------- Message Reactions ----------
+export async function addReaction(messagePath, uid, emoji) {
+  const ref = doc(db, messagePath);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const reactions = snap.data().reactions || {};
+  const users = reactions[emoji] || [];
+  if (!users.includes(uid)) users.push(uid);
+  reactions[emoji] = users;
+  await updateDoc(ref, { reactions });
+}
+
+// Re-export db for direct use in components
 export { db };
