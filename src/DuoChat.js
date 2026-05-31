@@ -33,19 +33,14 @@ export default function DuoChat() {
   const [friends, setFriends] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Friend requests listener
   useEffect(() => {
     if (!currentUser?.uid) return;
     const unsub = listenFriendRequests(currentUser.uid, setFriendRequests);
     return () => unsub();
   }, [currentUser?.uid]);
 
-  // Friends list (all chats where currentUser is participant)
   useEffect(() => {
     if (!currentUser?.uid) return;
     const q = query(
@@ -64,21 +59,18 @@ export default function DuoChat() {
     return () => unsub();
   }, [currentUser?.uid]);
 
-  // Typing listener for active chat
   useEffect(() => {
     if (!chatId) return;
     const unsub = listenChatTyping(chatId, setTypingUsers);
     return () => unsub();
   }, [chatId]);
 
-  // Friend's online presence when chat is open
   useEffect(() => {
     if (!chatId || !foundUser) return;
     const unsub = listenUserPresence(foundUser.uid, setFriendPresence);
     return () => unsub();
   }, [chatId, foundUser]);
 
-  // Messages listener for active chat
   useEffect(() => {
     if (!chatId) return;
     const q = query(
@@ -92,13 +84,12 @@ export default function DuoChat() {
     return () => unsub();
   }, [chatId]);
 
-  // Check if a user ID is already a friend
   const isFriend = (uid) => friends.some((f) => f.friendId === uid);
 
   const handleSearch = async () => {
     const code = searchInput.trim().toUpperCase();
-    if (!code.startsWith('CP-') || code.length !== 15) {
-      setSearchError('Invalid CP code format');
+    if (!code.startsWith('CP-') || code.length !== 13) {   // <-- changed to 13 (CP- + 10 digits)
+      setSearchError('Invalid CP code format (e.g., CP-1234567890)');
       setFoundUser(null);
       return;
     }
@@ -164,7 +155,6 @@ export default function DuoChat() {
       timestamp: serverTimestamp(),
     });
     setNewMessage('');
-    // Clear typing after sending
     handleTyping(false);
   };
 
@@ -172,7 +162,7 @@ export default function DuoChat() {
     if (chatId) setChatTyping(chatId, currentUser.uid, isTyping);
   };
 
-  // ---------- Sub-component: FriendCard ----------
+  // ---------- FriendCard ----------
   const FriendCard = ({ friendId }) => {
     const [friendProfile, setFriendProfile] = useState(null);
     useEffect(() => {
@@ -192,7 +182,7 @@ export default function DuoChat() {
     );
   };
 
-  // ---------- Sub-component: RequestCard (shows sender's name) ----------
+  // ---------- RequestCard ----------
   const RequestCard = ({ req }) => {
     const [sender, setSender] = useState(null);
     useEffect(() => {
@@ -249,7 +239,7 @@ export default function DuoChat() {
         React.createElement('h2', null, 'Find Friend'),
         React.createElement('div', { className: 'input-group' },
           React.createElement('label', null, 'CP Code'),
-          React.createElement('input', { className: 'input-field', type: 'text', placeholder: 'CP-123456789012', value: searchInput, onChange: (e) => setSearchInput(e.target.value.toUpperCase()), onKeyDown: (e) => e.key === 'Enter' && handleSearch() })
+          React.createElement('input', { className: 'input-field', type: 'text', placeholder: 'CP-1234567890', value: searchInput, onChange: (e) => setSearchInput(e.target.value.toUpperCase()), onKeyDown: (e) => e.key === 'Enter' && handleSearch() })
         ),
         React.createElement('button', { className: 'btn btn-primary', onClick: handleSearch, style: { width: '100%' } }, 'Search'),
         searchError && React.createElement('div', { className: 'fade-in error-msg' }, searchError),
@@ -322,4 +312,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-                               }
+    }
