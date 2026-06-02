@@ -277,3 +277,20 @@ export async function searchUsersByName(queryText, currentUid) {
 }
 
 export { db };
+
+// ---------- Profile Picture (base64 in Firestore) ----------
+export async function updateProfilePicture(uid, base64Image) {
+  if (!base64Image || !uid) return;
+  await updateDoc(doc(db, 'users', uid), { photoURL: base64Image });
+}
+
+// ---------- Message Seen / Delivered ----------
+export async function markMessageAsSeen(chatId, messageId, uid) {
+  const msgRef = doc(db, 'chats', chatId, 'messages', messageId);
+  await updateDoc(msgRef, { seen: true, seenBy: arrayUnion(uid) });
+}
+
+export async function markRoomMessageAsSeen(roomId, messageId, uid) {
+  const msgRef = doc(db, 'rooms', roomId, 'messages', messageId);
+  await updateDoc(msgRef, { seen: true, seenBy: arrayUnion(uid) });
+}
