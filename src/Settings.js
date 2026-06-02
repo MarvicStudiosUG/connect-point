@@ -73,7 +73,6 @@ export default function Settings() {
   const toastElement = toastVisible ? React.createElement('div', { className:`fade-in toast ${toastType}`, style:{ position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)', zIndex:9999, padding:'12px 24px', borderRadius:'16px', background: toastType==='success'?'rgba(34,197,94,0.95)':toastType==='error'?'rgba(239,68,68,0.95)':'rgba(127,90,240,0.95)', color:'white', fontWeight:'600', boxShadow:'0 8px 32px rgba(0,0,0,0.3)', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:'8px' } },
     React.createElement('i', { className:`ph ${toastType==='success'?'ph-check-circle':toastType==='error'?'ph-x-circle':'ph-info'}` }), toastMessage) : null;
 
-  // Profile card
   const profileCard = React.createElement('div', { className:'glass', style:{ padding:'1.5rem', marginBottom:'16px', borderRadius:'20px' } },
     React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:'1.5rem' } },
       React.createElement('div', { style:{ position:'relative', width:'100px', height:'100px', borderRadius:'50%', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' } },
@@ -84,7 +83,6 @@ export default function Settings() {
       React.createElement('p', { style:{ color:'var(--text-secondary)', marginTop:'4px' } }, currentUser.email),
       React.createElement('span', { style:{ fontSize:'0.8rem', color:'var(--text-secondary)', background:'var(--surface)', padding:'4px 12px', borderRadius:'12px', border:'1px solid var(--border)' } }, currentUser.cpCode)
     ),
-    // Display Name
     React.createElement('div', { style:{ marginTop:'1rem' } },
       React.createElement('label', null, 'Display Name'),
       React.createElement('div', { style:{ display:'flex', gap:'8px', marginTop:'4px' } },
@@ -92,7 +90,6 @@ export default function Settings() {
         React.createElement('button', { className:'btn btn-primary', onClick:handleSaveDisplayName, style:{ padding:'0 20px' } }, displayNameSaved ? 'Saved!' : 'Save')
       )
     ),
-    // Status
     React.createElement('div', { style:{ marginTop:'1rem' } },
       React.createElement('label', null, 'Status'),
       React.createElement('div', { style:{ display:'flex', gap:'8px', marginTop:'4px' } },
@@ -101,7 +98,6 @@ export default function Settings() {
       ),
       React.createElement('div', { style:{ fontSize:'0.75rem', color:'var(--text-secondary)', marginTop:'4px' } }, `${status.length}/100 characters`)
     ),
-    // CP Code change
     React.createElement('div', { style:{ marginTop:'1.5rem' } },
       React.createElement('label', null, 'Your CP Code'),
       React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'12px', padding:'12px', margin:'8px 0' } },
@@ -125,7 +121,6 @@ export default function Settings() {
     )
   );
 
-  // Security card
   const securityCard = React.createElement('div', { className:'glass', style:{ padding:'1.5rem', marginBottom:'16px', borderRadius:'20px' } },
     React.createElement('h3', { style:{ marginBottom:'1rem' } }, 'Security'),
     React.createElement('button', { className:'btn', onClick:handleResetPassword, style:{ width:'100%', marginBottom:'8px' } }, passwordResetSent ? 'Reset email sent!' : 'Reset Password'),
@@ -141,7 +136,6 @@ export default function Settings() {
       : React.createElement('button', { className:'btn', style:{ borderColor:'var(--danger)', color:'var(--danger)', width:'100%' }, onClick:() => setShowDeleteConfirm(true) }, React.createElement('i', { className:'ph ph-trash' }), ' Delete Account')
   );
 
-  // Preferences card
   const preferencesCard = React.createElement('div', { className:'glass', style:{ padding:'1.5rem', marginBottom:'16px', borderRadius:'20px' } },
     React.createElement('h3', { style:{ marginBottom:'1rem' } }, 'Preferences'),
     React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--border)' } },
@@ -163,7 +157,6 @@ export default function Settings() {
     )
   );
 
-  // Privacy card
   const privacyCard = React.createElement('div', { className:'glass', style:{ padding:'1.5rem', marginBottom:'16px', borderRadius:'20px' } },
     React.createElement('h3', { style:{ marginBottom:'1rem' } }, 'Privacy'),
     React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--border)' } },
@@ -180,14 +173,12 @@ export default function Settings() {
     )
   );
 
-  // Data card
   const dataCard = React.createElement('div', { className:'glass', style:{ padding:'1.5rem', marginBottom:'16px', borderRadius:'20px' } },
     React.createElement('h3', { style:{ marginBottom:'1rem' } }, 'Data'),
     React.createElement('button', { className:'btn', onClick:handleExportData, style:{ width:'100%', marginBottom:'8px' } }, React.createElement('i', { className:'ph ph-download-simple' }), ' Export Data'),
     React.createElement('button', { className:'btn', onClick:() => showToast('Data clearing coming soon!', 'info'), style:{ width:'100%' } }, React.createElement('i', { className:'ph ph-trash' }), ' Clear Local Data')
   );
 
-  // Sign out
   const signOutCard = React.createElement('div', { className:'glass', style:{ padding:'1.5rem', borderRadius:'20px' } },
     React.createElement('button', { className:'btn', onClick:() => auth.signOut(), style:{ background:'var(--danger)', color:'white', width:'100%' } }, React.createElement('i', { className:'ph ph-sign-out' }), ' Sign Out')
   );
@@ -195,4 +186,4 @@ export default function Settings() {
   return React.createElement('div', { className:'settings-container', style:{ padding:'16px', maxWidth:'600px', margin:'0 auto' } },
     toastElement, profileCard, securityCard, preferencesCard, privacyCard, dataCard, signOutCard
   );
-    }
+      }
