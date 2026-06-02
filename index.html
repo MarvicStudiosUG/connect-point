@@ -1,31 +1,48 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Connect Point</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#7f5af0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
+  <link rel="stylesheet" href="src/styles.css" />
   <script type="importmap">
     {
       "imports": {
         "react": "https://esm.sh/react@18.3.1",
-        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client"
+        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
       }
     }
   </script>
 </head>
 <body>
   <div id="root"></div>
-  <script type="module">
-    import { createRoot } from 'react-dom/client';
-    import React from 'react';
-
-    try {
-      const root = createRoot(document.getElementById('root'));
-      root.render(React.createElement('h1', { style: { color: 'white', background: 'black', padding: '2rem' } }, 'Hello World'));
-    } catch (err) {
-      document.body.innerHTML = '<pre style="color:red">Error: ' + err.message + '</pre>';
-    }
+  <div id="error-dump" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#08090d; color:white; padding:20px; overflow:auto; z-index:9999; font-family:monospace;"></div>
+  <script>
+    window.onerror = function(msg, url, line, col, err) {
+      var dump = document.getElementById('error-dump');
+      dump.style.display = 'block';
+      dump.innerHTML += '<p style="color:#ef4444;"><b>Error:</b> ' + msg + '</p>';
+      dump.innerHTML += '<p style="color:#8888a0;">File: ' + url + ' (line ' + line + ')</p>';
+      return true;
+    };
+    window.addEventListener('unhandledrejection', function(event) {
+      var dump = document.getElementById('error-dump');
+      dump.style.display = 'block';
+      dump.innerHTML += '<p style="color:#ef4444;"><b>Rejection:</b> ' + event.reason + '</p>';
+    });
   </script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>
