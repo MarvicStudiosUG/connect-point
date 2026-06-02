@@ -4,14 +4,11 @@ const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => localStorage.getItem('cp-theme') || 'dark');
-
   useEffect(() => {
     document.documentElement.classList.toggle('light-theme', theme === 'light');
     localStorage.setItem('cp-theme', theme);
   }, [theme]);
-
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-
   return React.createElement(ThemeContext.Provider, { value: { theme, toggleTheme } }, children);
 }
 
