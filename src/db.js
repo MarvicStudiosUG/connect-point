@@ -5,7 +5,6 @@ import {
 } from 'firebase/firestore';
 import { db } from './config.js';
 
-// ---------- CP code generation (10 digits) ----------
 function generateCPCode() {
   const digits = '0123456789';
   let code = 'CP-';
@@ -17,7 +16,6 @@ export async function createUserProfile(user) {
   const userDocRef = doc(db, 'users', user.uid);
   const userSnap = await getDoc(userDocRef);
   if (userSnap.exists()) return userSnap.data();
-
   let cpCode = null;
   for (let attempt = 0; attempt < 10; attempt++) {
     cpCode = generateCPCode();
@@ -34,7 +32,6 @@ export async function createUserProfile(user) {
       if (attempt === 9) throw new Error('Could not generate unique CP code');
     }
   }
-
   const userData = {
     uid: user.uid,
     email: user.email || '',
@@ -44,7 +41,7 @@ export async function createUserProfile(user) {
     createdAt: new Date(),
     online: true,
     lastSeen: new Date(),
-    status: '', // custom status/bio
+    status: '',
   };
   await setDoc(userDocRef, userData);
   return userData;
@@ -61,15 +58,12 @@ export async function getUserByCpCode(cpCode) {
   return getUserProfile(codeSnap.data().uid);
 }
 
-// ---------- Change CP Code (once per month) ----------
 export async function changeUserCpCode(uid, newCpCode) {
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
   if (!userSnap.exists()) throw new Error('User not found');
-
   const userData = userSnap.data();
   const lastChanged = userData.cpCodeLastChanged?.toDate() || null;
-
   if (lastChanged) {
     const daysSince = (Date.now() - lastChanged.getTime()) / (1000 * 60 * 60 * 24);
     if (daysSince < 30) {
@@ -77,58 +71,28 @@ export async function changeUserCpCode(uid, newCpCode) {
       throw new Error(`You can change your CP code again in ${remaining} day(s).`);
     }
   }
-
-  if (!/^CP-\d{10}$/.test(newCpCode)) {
-    throw new Error('Invalid CP code format (must be CP-XXXXXXXXXX)');
-  }
-
+  if (!/^CP-\d{10}$/.test(newCpCode)) throw new Error('Invalid CP code format (must be CP-XXXXXXXXXX)');
   const codeDoc = await getDoc(doc(db, 'cpCodes', newCpCode));
-  if (codeDoc.exists()) {
-    throw new Error('This CP code is already taken.');
-  }
-
+  if (codeDoc.exists()) throw new Error('This CP code is already taken.');
   await runTransaction(db, async (transaction) => {
     const oldCodeDoc = doc(db, 'cpCodes', userData.cpCode);
     transaction.delete(oldCodeDoc);
-
-    transaction.set(doc(db, 'cpCodes', newCpCode), {
-      uid: uid,
-      createdAt: new Date()
-    });
-
-    transaction.update(userRef, {
-      cpCode: newCpCode,
-      cpCodeLastChanged: new Date()
-    });
+    transaction.set(doc(db, 'cpCodes', newCpCode), { uid, createdAt: new Date() });
+    transaction.update(userRef, { cpCode: newCpCode, cpCodeLastChanged: new Date() });
   });
-
   return newCpCode;
 }
 
-// ---------- Friend Requests ----------
 export async function sendFriendRequest(fromUid, toCpCode) {
   const toUser = await getUserByCpCode(toCpCode);
   if (!toUser) throw new Error('User not found');
   if (fromUid === toUser.uid) throw new Error('Cannot request yourself');
-
   const ids = [fromUid, toUser.uid].sort();
   const chatDoc = await getDoc(doc(db, 'chats', `${ids[0]}_${ids[1]}`));
   if (chatDoc.exists()) throw new Error('Already friends');
-
-  const existing = await getDocs(query(
-    collection(db, 'friendRequests'),
-    where('from', '==', fromUid),
-    where('to', '==', toUser.uid),
-    where('status', '==', 'pending')
-  ));
+  const existing = await getDocs(query(collection(db, 'friendRequests'), where('from', '==', fromUid), where('to', '==', toUser.uid), where('status', '==', 'pending')));
   if (!existing.empty) throw new Error('Request already sent');
-
-  await addDoc(collection(db, 'friendRequests'), {
-    from: fromUid,
-    to: toUser.uid,
-    status: 'pending',
-    createdAt: new Date()
-  });
+  await addDoc(collection(db, 'friendRequests'), { from: fromUid, to: toUser.uid, status: 'pending', createdAt: new Date() });
 }
 
 export async function acceptFriendRequest(requestId, accepterUid) {
@@ -138,14 +102,9 @@ export async function acceptFriendRequest(requestId, accepterUid) {
   const data = snap.data();
   if (data.to !== accepterUid) throw new Error('Not for you');
   if (data.status !== 'pending') throw new Error('Already handled');
-
   const ids = [data.from, data.to].sort();
   const chatId = `${ids[0]}_${ids[1]}`;
-  await setDoc(doc(db, 'chats', chatId), {
-    participants: ids,
-    createdAt: new Date(),
-    lastMessage: ''
-  });
+  await setDoc(doc(db, 'chats', chatId), { participants: ids, createdAt: new Date(), lastMessage: '' });
   await updateDoc(requestRef, { status: 'accepted' });
   return { chatId, friendId: data.from };
 }
@@ -158,11 +117,7 @@ export async function declineFriendRequest(requestId, declinerUid) {
 }
 
 export function listenFriendRequests(uid, callback) {
-  const q = query(
-    collection(db, 'friendRequests'),
-    where('to', '==', uid),
-    where('status', '==', 'pending')
-  );
+  const q = query(collection(db, 'friendRequests'), where('to', '==', uid), where('status', '==', 'pending'));
   return onSnapshot(q, snapshot => {
     const requests = [];
     snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
@@ -170,28 +125,8 @@ export function listenFriendRequests(uid, callback) {
   });
 }
 
-// ---------- Unfriend ----------
-export async function unfriend(uid1, uid2) {
-  const ids = [uid1, uid2].sort();
-  const chatId = `${ids[0]}_${ids[1]}`;
-  await deleteDoc(doc(db, 'chats', chatId));
-  // Also delete any pending friend requests between them
-  const requests = await getDocs(query(
-    collection(db, 'friendRequests'),
-    where('from', 'in', [uid1, uid2]),
-    where('to', 'in', [uid1, uid2])
-  ));
-  for (const req of requests.docs) {
-    await deleteDoc(req.ref);
-  }
-}
-
-// ---------- Online Presence ----------
 export async function setUserOnline(uid, online) {
-  await updateDoc(doc(db, 'users', uid), {
-    online,
-    lastSeen: new Date()
-  });
+  await updateDoc(doc(db, 'users', uid), { online, lastSeen: new Date() });
 }
 
 export function listenUserPresence(uid, callback) {
@@ -200,7 +135,6 @@ export function listenUserPresence(uid, callback) {
   });
 }
 
-// ---------- Typing ----------
 export async function setChatTyping(chatId, uid, isTyping) {
   const ref = doc(db, 'chats', chatId, 'typing', uid);
   if (isTyping) await setDoc(ref, { uid, timestamp: new Date() });
@@ -229,7 +163,6 @@ export function listenRoomTyping(roomId, callback) {
   });
 }
 
-// ---------- Room Helpers ----------
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'RC-';
@@ -241,7 +174,6 @@ export async function createRoom({ name, description, isPublic, password }) {
   const auth = (await import('firebase/auth')).getAuth();
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
-
   let roomCode = null;
   for (let attempt = 0; attempt < 10; attempt++) {
     roomCode = generateRoomCode();
@@ -249,7 +181,6 @@ export async function createRoom({ name, description, isPublic, password }) {
     if (!codeDoc.exists()) break;
     if (attempt === 9) throw new Error('Could not generate unique room code');
   }
-
   const roomData = {
     name,
     description: description || '',
@@ -260,7 +191,6 @@ export async function createRoom({ name, description, isPublic, password }) {
     roomCode,
     createdAt: new Date(),
   };
-
   const roomRef = doc(collection(db, 'rooms'));
   await setDoc(roomRef, roomData);
   await setDoc(doc(db, 'roomCodes', roomCode), { roomId: roomRef.id });
@@ -271,25 +201,18 @@ export async function joinRoomByCode(roomCode, password = '') {
   const auth = (await import('firebase/auth')).getAuth();
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
-
   const codeDoc = await getDoc(doc(db, 'roomCodes', roomCode));
   if (!codeDoc.exists()) throw new Error('Room not found');
-
   const roomId = codeDoc.data().roomId;
   const roomRef = doc(db, 'rooms', roomId);
   const roomSnap = await getDoc(roomRef);
   if (!roomSnap.exists()) throw new Error('Room does not exist');
-
   const roomData = roomSnap.data();
-  if (roomData.members.includes(user.uid)) {
-    return { id: roomId, ...roomData };
-  }
-
+  if (roomData.members.includes(user.uid)) return { id: roomId, ...roomData };
   if (!roomData.isPublic) {
     if (!password) throw new Error('Password required');
     if (btoa(password) !== roomData.passwordHash) throw new Error('Incorrect password');
   }
-
   await updateDoc(roomRef, { members: arrayUnion(user.uid) });
   return { id: roomId, ...roomData, members: [...roomData.members, user.uid] };
 }
@@ -322,46 +245,35 @@ export async function deleteRoom(roomId) {
   await deleteDoc(doc(db, 'rooms', roomId));
 }
 
-// ---------- Message Reactions (now use strings like "like","love","laugh") ----------
 export async function addReaction(messagePath, uid, reactionType) {
   const ref = doc(db, messagePath);
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
   const reactions = snap.data().reactions || {};
   if (!reactions[reactionType]) reactions[reactionType] = [];
-  if (!reactions[reactionType].includes(uid)) {
-    reactions[reactionType].push(uid);
-    await updateDoc(ref, { reactions });
-  }
+  if (!reactions[reactionType].includes(uid)) reactions[reactionType].push(uid);
+  await updateDoc(ref, { reactions });
 }
 
-// ---------- Delete Message ----------
 export async function deleteMessage(path, uid) {
   const ref = doc(db, path);
   const snap = await getDoc(ref);
-  if (snap.exists() && snap.data().senderId === uid) {
-    await deleteDoc(ref);
-  }
+  if (snap.exists() && snap.data().senderId === uid) await deleteDoc(ref);
 }
 
-// ---------- User search by name (basic prefix search) ----------
+export async function unfriend(uid1, uid2) {
+  const ids = [uid1, uid2].sort();
+  const chatId = `${ids[0]}_${ids[1]}`;
+  await deleteDoc(doc(db, 'chats', chatId));
+}
+
 export async function searchUsersByName(queryText, currentUid) {
   if (!queryText || queryText.length < 2) return [];
-  // Firestore doesn't support full-text search; we'll do a prefix query on displayName
-  const q = query(
-    collection(db, 'users'),
-    where('displayName', '>=', queryText),
-    where('displayName', '<=', queryText + '\uf8ff')
-  );
+  const q = query(collection(db, 'users'), where('displayName', '>=', queryText), where('displayName', '<=', queryText + '\uf8ff'));
   const snapshot = await getDocs(q);
   const results = [];
-  snapshot.forEach(d => {
-    if (d.id !== currentUid) {
-      results.push({ uid: d.id, ...d.data() });
-    }
-  });
+  snapshot.forEach(d => { if (d.id !== currentUid) results.push({ uid: d.id, ...d.data() }); });
   return results;
 }
 
-// Re-export db
 export { db };
