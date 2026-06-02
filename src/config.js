@@ -17,7 +17,3 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 export const githubProvider = new GithubAuthProvider();
-
-// Free API key from https://www.omdbapi.com/apikey.aspx
-// Replace with your actual key or leave as is (trilogy is a demo key)
-export const MOVIE_API_KEY = 'trilogy';
