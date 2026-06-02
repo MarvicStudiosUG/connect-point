@@ -294,3 +294,33 @@ export async function markRoomMessageAsSeen(roomId, messageId, uid) {
   const msgRef = doc(db, 'rooms', roomId, 'messages', messageId);
   await updateDoc(msgRef, { seen: true, seenBy: arrayUnion(uid) });
 }
+
+// ---------- Vault (secure notes) ----------
+export async function getVaultNotes(uid) {
+  const notesRef = collection(db, 'users', uid, 'vault');
+  const q = query(notesRef, orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  const notes = [];
+  snapshot.forEach(d => notes.push({ id: d.id, ...d.data() }));
+  return notes;
+}
+
+export async function createVaultNote(uid, title, content) {
+  const notesRef = collection(db, 'users', uid, 'vault');
+  await addDoc(notesRef, {
+    title,
+    content,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateVaultNote(uid, noteId, updates) {
+  const noteRef = doc(db, 'users', uid, 'vault', noteId);
+  await updateDoc(noteRef, { ...updates, updatedAt: serverTimestamp() });
+}
+
+export async function deleteVaultNote(uid, noteId) {
+  const noteRef = doc(db, 'users', uid, 'vault', noteId);
+  await deleteDoc(noteRef);
+}
