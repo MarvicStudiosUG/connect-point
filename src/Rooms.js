@@ -223,9 +223,218 @@ export default function Rooms() {
 
   const enterRoom = room => { setSelectedRoom(room); setShowAdmin(false); setShowMemberList(false); setView('chat'); setReplyTo(null); setEditMessage(null); setForwardMessage(null); setNewMessage(''); };
 
-  // RoomCard, MessageBubble, DateSeparator components (same as before but using REACTION_TYPES)
-  // ... (abbreviated for space, but included in the final complete file)
+  // RoomCard
+  const RoomCard = ({ room, isMember }) => {
+    const memberCount = room.members?.length || 0;
+    return React.createElement('div', { className:'room-card glass', style:{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px' } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px', flex:1, cursor:'pointer' }, onClick: () => isMember ? enterRoom(room) : showToast('Join this room first', 'info') },
+        React.createElement('div', { style:{ width:'44px', height:'44px', borderRadius:'12px', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'1.2rem', color:'white' } }, room.name.charAt(0).toUpperCase()),
+        React.createElement('div', null,
+          React.createElement('div', { style:{ fontWeight:'600' } }, room.name),
+          React.createElement('div', { style:{ fontSize:'0.8rem', color:'var(--text-secondary)' } }, `${memberCount} member${memberCount>1?'s':''}${room.adminUID===currentUser.uid?' · Admin':''}`, !room.isPublic && React.createElement('i', { className:'ph ph-lock', style:{ color:'var(--accent)', marginLeft:'8px' } }))
+        )
+      ),
+      React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, room.roomCode)
+    );
+  };
 
-  // For brevity, I'll skip the full RoomCard/MessageBubble code here, but they are identical to the ones in the previously polished Rooms.js (emoji-free, using REACTION_TYPES). The rest of the logic (including the chat view, admin panel, etc.) remains the same.
+  // MessageBubble
+  const MessageBubble = ({ msg }) => {
+    const isOwn = msg.senderId === currentUser.uid;
+    const isAdmin = selectedRoom?.adminUID === msg.senderId;
+    const reactions = msg.reactions || {};
+    const hasReactions = Object.keys(reactions).length > 0;
+    const isEdited = msg.edited === true;
+    const hasReply = msg.replyTo;
+    const isForwarded = msg.forwardedFrom;
+    const timeStr = msg.timestamp?.toDate?.()?.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) || '';
 
-  // In the final answer, I'll append the complete Rooms.js without truncation. The user already has a polished Rooms.js from earlier; this is just to ensure consistency with the new CSS.
+    const reactionPills = hasReactions ? React.createElement('div', { className:'reactions-bar', style:{ marginTop:'4px' } },
+      Object.entries(reactions).map(([type, users]) => {
+        const rdef = REACTION_TYPES.find(r => r.type === type);
+        const icon = rdef ? rdef.icon : 'ph-thumbs-up';
+        return React.createElement('span', { key:type, className:'reaction-item', onClick: () => handleAddReaction(msg.id, type) },
+          React.createElement('i', { className: icon + ' reaction-icon' }),
+          React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, users.length)
+        );
+      })) : null;
+
+    const replyPreview = hasReply ? React.createElement('div', { className:'reply-preview' },
+      React.createElement('span', { style:{ fontWeight:'bold', fontSize:'0.7rem', color:'var(--text-secondary)' } }, msg.replyTo.senderName + ': '),
+      React.createElement('span', { style:{ fontSize:'0.8rem' } }, msg.replyTo.text)
+    ) : null;
+
+    const forwardIndicator = isForwarded ? React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)', marginBottom:'2px' } }, 'Forwarded from ' + msg.forwardedFrom.senderName) : null;
+
+    const quickReactions = React.createElement('div', { style:{ display:'flex', gap:'2px', marginTop:'2px' } },
+      REACTION_TYPES.slice(0,4).map(rdef =>
+        React.createElement('button', { key:rdef.type, className:'btn-icon', title:rdef.label, onClick:() => handleAddReaction(msg.id, rdef.type) },
+          React.createElement('i', { className: rdef.icon }))
+      ));
+
+    const messageActions = React.createElement('div', { className:'message-actions' },
+      React.createElement('button', { className:'btn-icon', title:'Reply', onClick:() => setReplyTo({ id:msg.id, text:msg.text, senderName:msg.senderName }) }, React.createElement('i', { className:'ph ph-arrow-bend-left-up' })),
+      React.createElement('button', { className:'btn-icon', title:'Forward', onClick:() => setForwardMessage(msg) }, React.createElement('i', { className:'ph ph-arrow-bend-right-down' })),
+      isOwn && React.createElement('button', { className:'btn-icon', title:'Edit', onClick:() => { setEditMessage(msg); setNewMessage(msg.text); } }, React.createElement('i', { className:'ph ph-pencil-simple' })),
+      (isOwn || isAdmin) && React.createElement('button', { className:'btn-icon', title:'Delete', onClick:() => handleDeleteMessage(msg.id) }, React.createElement('i', { className:'ph ph-trash', style:{ color:'var(--danger)' } }))
+    );
+
+    return React.createElement('div', { className:`chat-bubble ${isOwn ? 'own' : 'other'}` },
+      isAdmin && !isOwn && React.createElement('span', { style:{ fontSize:'0.6rem', color:'var(--accent)', fontWeight:'bold' } }, 'Admin'),
+      replyPreview, forwardIndicator,
+      React.createElement('div', { className:'bubble-text' }, msg.text),
+      isEdited && React.createElement('span', { style:{ fontSize:'0.6rem', opacity:0.6 } }, ' (edited)'),
+      quickReactions, reactionPills,
+      React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'2px' } },
+        React.createElement('div', { className:'bubble-time' }, timeStr),
+        messageActions
+      )
+    );
+  };
+
+  // DateSeparator
+  const DateSeparator = ({ date }) => {
+    const today = new Date().toLocaleDateString();
+    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString();
+    let label = date;
+    if (date === today) label = 'Today';
+    else if (date === yesterday) label = 'Yesterday';
+    return React.createElement('div', { style:{ textAlign:'center', padding:'8px 0', color:'var(--text-secondary)', fontSize:'0.75rem' } },
+      React.createElement('span', { style:{ background:'var(--surface)', padding:'4px 12px', borderRadius:'12px' } }, label)
+    );
+  };
+
+  // Views
+  const renderList = () => React.createElement('div', { className:'rooms-container', style:{ padding:'16px' } },
+    React.createElement('div', { className:'rooms-header', style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' } },
+      React.createElement('h2', null, 'Rooms'),
+      React.createElement('div', { className:'rooms-header-actions', style:{ display:'flex', gap:'8px' } },
+        React.createElement('button', { className:'btn btn-primary', onClick:() => setView('create') }, React.createElement('i', { className:'ph ph-plus' }), ' Create'),
+        React.createElement('button', { className:'btn', onClick:() => setView('join') }, React.createElement('i', { className:'ph ph-sign-in' }), ' Join')
+      )
+    ),
+    React.createElement('div', { className:'search-bar', style:{ marginBottom:'16px' } },
+      React.createElement('input', { className:'input-field', type:'text', placeholder:'Search public rooms...', value:searchRoomName, onChange:e => setSearchRoomName(e.target.value), style:{ width:'100%' } })
+    ),
+    React.createElement('h3', { className:'rooms-section-title', style:{ marginBottom:'12px', fontSize:'1rem', color:'var(--text-secondary)' } }, 'Your Rooms'),
+    rooms.length === 0 ? React.createElement('p', { className:'text-secondary', style:{ textAlign:'center', padding:'2rem 0' } }, "You haven't joined any rooms yet.") :
+    React.createElement('div', { className:'rooms-grid', style:{ display:'flex', flexDirection:'column', gap:'12px' } },
+      rooms.map(room => React.createElement(RoomCard, { key:room.id, room, isMember:true }))
+    ),
+    React.createElement('h3', { className:'rooms-section-title', style:{ marginTop:'24px', marginBottom:'12px', fontSize:'1rem', color:'var(--text-secondary)' } }, 'Public Rooms'),
+    publicRooms.length === 0 ? React.createElement('p', { className:'text-secondary', style:{ textAlign:'center', padding:'2rem 0' } }, 'No public rooms available.') :
+    React.createElement('div', { className:'rooms-grid', style:{ display:'flex', flexDirection:'column', gap:'12px' } },
+      publicRooms.map(room => React.createElement(RoomCard, { key:room.id, room, isMember:false }))
+    )
+  );
+
+  const renderChat = () => {
+    if (!selectedRoom) return null;
+    const isAdmin = selectedRoom.adminUID === currentUser.uid;
+    const memberCount = selectedRoom.members?.length || 0;
+
+    const groupedMessages = [];
+    let currentDate = null;
+    messages.forEach(msg => {
+      const date = msg.timestamp?.toDate?.()?.toLocaleDateString() || '';
+      if (date !== currentDate) { currentDate = date; if (date) groupedMessages.push({ type:'date', date, key:`date-${date}` }); }
+      groupedMessages.push({ type:'message', msg, key:msg.id });
+    });
+
+    const messageElements = groupedMessages.map(item => item.type==='date' ? React.createElement(DateSeparator, { key:item.key, date:item.date }) : React.createElement(MessageBubble, { key:item.key, msg:item.msg }));
+
+    const typingIndicator = typingUsers.length > 0 ? React.createElement('div', { style:{ fontStyle:'italic', padding:'4px 16px', color:'var(--text-secondary)', fontSize:'0.85rem' } }, 'Someone is typing...') : null;
+
+    // Admin panel
+    const adminPanel = showAdmin && isAdmin ? React.createElement('div', { className:'admin-panel glass', style:{ position:'absolute', top:'60px', right:'16px', width:'280px', zIndex:50, padding:'16px', borderRadius:'16px' } },
+      React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' } },
+        React.createElement('h4', { style:{ margin:0 } }, 'Admin Controls'),
+        React.createElement('button', { className:'btn-icon', onClick:() => setShowAdmin(false) }, React.createElement('i', { className:'ph ph-x' }))
+      ),
+      React.createElement('div', { className:'input-group' },
+        React.createElement('label', null, 'Rename Room'),
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('input', { className:'input-field', id:'newName', type:'text', defaultValue:selectedRoom.name, style:{ flex:1 } }),
+          React.createElement('button', { className:'btn btn-primary', onClick:() => handleAdminAction('updateName', document.getElementById('newName').value), style:{ padding:'8px 16px', fontSize:'0.8rem' } }, 'Save')
+        )
+      ),
+      React.createElement('button', { className:'btn', onClick:() => handleAdminAction('togglePublic'), style:{ width:'100%', marginBottom:'8px' } }, selectedRoom.isPublic ? 'Make Private' : 'Make Public'),
+      React.createElement('div', { className:'admin-members', style:{ marginBottom:'8px' } },
+        React.createElement('strong', null, `Members (${memberCount})`),
+        React.createElement('div', { style:{ maxHeight:'200px', overflowY:'auto', marginTop:'4px' } },
+          selectedRoom.members.map(mid => {
+            const isOnline = memberPresence[mid] || false;
+            return React.createElement('div', { key:mid, style:{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0', borderBottom:'1px solid var(--border)', fontSize:'0.85rem' } },
+              React.createElement('span', null,
+                mid === currentUser.uid ? 'You' : mid,
+                isOnline && React.createElement('span', { className:'online-dot', style:{ marginLeft:'8px' } })
+              ),
+              mid !== currentUser.uid && React.createElement('button', { className:'btn-icon', style:{ color:'var(--danger)' }, onClick:() => handleAdminAction('removeMember', mid) }, React.createElement('i', { className:'ph ph-user-minus' }))
+            );
+          })
+        )
+      ),
+      React.createElement('button', { className:'btn', onClick:() => handleAdminAction('delete'), style:{ width:'100%', background:'var(--danger)', color:'white', marginBottom:'4px' } }, 'Delete Room'),
+      React.createElement('button', { className:'btn', onClick:handleLeaveRoom, style:{ width:'100%' } }, 'Leave Room')
+    ) : null;
+
+    // Member list
+    const memberList = showMemberList ? React.createElement('div', { className:'glass', style:{ position:'absolute', top:'60px', right:'16px', width:'220px', zIndex:50, padding:'12px', borderRadius:'16px' } },
+      React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' } },
+        React.createElement('strong', null, 'Members'),
+        React.createElement('button', { className:'btn-icon', onClick:() => setShowMemberList(false) }, React.createElement('i', { className:'ph ph-x' }))
+      ),
+      selectedRoom.members.map(mid => {
+        const isOnline = memberPresence[mid] || false;
+        return React.createElement('div', { key:mid, style:{ display:'flex', alignItems:'center', gap:'8px', padding:'4px 0', fontSize:'0.85rem' } },
+          React.createElement('span', { style:{ display:'inline-block', width:'8px', height:'8px', borderRadius:'50%', background: isOnline ? '#22c55e' : 'var(--text-secondary)' } }),
+          mid === currentUser.uid ? 'You' : mid,
+          mid === selectedRoom.adminUID && React.createElement('span', { style:{ fontSize:'0.6rem', color:'var(--accent)' } }, 'Admin')
+        );
+      })
+    ) : null;
+
+    // Reply/Edit/Forward bars
+    const replyBar = replyTo ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Replying to ' + replyTo.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, replyTo.text)), React.createElement('button', { className:'btn-icon', onClick:() => setReplyTo(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
+    const editBar = editMessage ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--accent)' } }, 'Editing message'), React.createElement('div', { style:{ fontSize:'0.85rem' } }, editMessage.text)), React.createElement('button', { className:'btn-icon', onClick:() => { setEditMessage(null); setNewMessage(''); } }, React.createElement('i', { className:'ph ph-x' }))) : null;
+    const forwardBar = forwardMessage ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Forwarding from ' + forwardMessage.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, forwardMessage.text)), React.createElement('button', { className:'btn-icon', onClick:() => setForwardMessage(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
+
+    return React.createElement('div', { className:'duo-container chat-active', style:{ height:'calc(100vh - 160px)', display:'flex', flexDirection:'column', borderRadius:'20px', overflow:'hidden', position:'relative' } },
+      React.createElement('div', { className:'chat-header' },
+        React.createElement('button', { className:'btn-icon', onClick:() => { setView('list'); setSelectedRoom(null); } }, React.createElement('i', { className:'ph ph-arrow-left' })),
+        React.createElement('div', { style:{ flex:1, marginLeft:'12px', cursor:'pointer' }, onClick:() => setShowMemberList(!showMemberList) },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+            React.createElement('strong', null, selectedRoom.name),
+            React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, `(${memberCount})`),
+            !selectedRoom.isPublic && React.createElement('i', { className:'ph ph-lock', style:{ color:'var(--accent)' } })
+          ),
+          React.createElement('div', { style:{ fontSize:'0.75rem', color:'var(--text-secondary)' } }, selectedRoom.description || selectedRoom.roomCode)
+        ),
+        isAdmin && React.createElement('button', { className:'btn-icon', onClick:() => setShowAdmin(!showAdmin) }, React.createElement('i', { className:'ph ph-shield-check', style:{ color:'var(--accent)' } })),
+        React.createElement('button', { className:'btn-icon', onClick:() => setShowMemberList(!showMemberList) }, React.createElement('i', { className:'ph ph-users' }))
+      ),
+      adminPanel, memberList,
+      React.createElement('div', { className:'chat-messages' },
+        messageElements.length === 0 ? React.createElement('div', { style:{ textAlign:'center', padding:'2rem 0', color:'var(--text-secondary)' } }, React.createElement('i', { className:'ph ph-chat-circle-dots', style:{ fontSize:'3rem', opacity:0.3 } }), React.createElement('p', null, 'No messages yet.')) : messageElements,
+        typingIndicator,
+        React.createElement('div', { ref: messagesEndRef })
+      ),
+      replyBar, editBar, forwardBar,
+      React.createElement('form', { className:'chat-input-area', onSubmit:sendMessage },
+        React.createElement('input', { className:'input-field', type:'text', value:newMessage, onChange:e => setNewMessage(e.target.value), placeholder: editMessage ? 'Edit message...' : forwardMessage ? 'Add a note...' : 'Type a message...', onFocus:() => handleTyping(true), onBlur:() => handleTyping(false), onKeyDown:e => e.key==='Enter' && !e.shiftKey && sendMessage(e), style:{ flex:1, marginBottom:0, padding:'12px 16px', borderRadius:'24px' } }),
+        React.createElement('button', { type:'submit', className:'btn btn-primary', disabled:!newMessage.trim() && !forwardMessage, style:{ padding:'10px 16px', borderRadius:'50%', width:'48px', height:'48px', display:'flex', alignItems:'center', justifyContent:'center' } },
+          React.createElement('i', { className:`ph ${editMessage ? 'ph-pencil-simple' : forwardMessage ? 'ph-arrow-bend-right-down' : 'ph-paper-plane-right'}`, style:{ fontSize:'1.2rem' } }))
+      )
+    );
+  };
+
+  switch (view) {
+    case 'create': return React.createElement(CreateRoomView, { onBack:() => setView('list'), onCreated:() => { loadRooms(); setView('list'); showToast('Room created!', 'success'); } });
+    case 'join': return React.createElement(JoinRoomView, { onBack:() => setView('list'), onJoined:() => { loadRooms(); setView('list'); showToast('Joined room!', 'success'); } });
+    case 'chat': return renderChat();
+    default: return React.createElement(React.Fragment, null,
+      toast && React.createElement(Toast, { message:toast.message, type:toast.type, onClose:() => setToast(null) }),
+      renderList()
+    );
+  }
+        }
