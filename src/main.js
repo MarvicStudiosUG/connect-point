@@ -14,10 +14,10 @@ import Rooms from './Rooms.js';
 import Settings from './Settings.js';
 
 const TABS = [
-  { id:'solo', label:'Solo', icon:'ph-terminal-window' },
-  { id:'duo', label:'Duo', icon:'ph-chats' },
-  { id:'rooms', label:'Rooms', icon:'ph-users-three' },
-  { id:'settings', label:'Settings', icon:'ph-gear' },
+  { id: 'solo', label: 'Solo', icon: 'ph-terminal-window' },
+  { id: 'duo', label: 'Duo', icon: 'ph-chats' },
+  { id: 'rooms', label: 'Rooms', icon: 'ph-users-three' },
+  { id: 'settings', label: 'Settings', icon: 'ph-gear' },
 ];
 
 function AppContent() {
@@ -39,7 +39,6 @@ function AppContent() {
           setUserOnline(firebaseUser.uid, true);
           window.addEventListener('beforeunload', () => setUserOnline(firebaseUser.uid, false));
         } catch (err) {
-          console.error('Profile creation error:', err);
           setError('Failed to create profile: ' + err.message);
           await auth.signOut();
         }
@@ -64,19 +63,14 @@ function AppContent() {
   };
 
   const renderScreen = () => {
-    const screenMap = {
-      solo: SoloChat,
-      duo: DuoChat,
-      rooms: Rooms,
-      settings: Settings
-    };
+    const screenMap = { solo: SoloChat, duo: DuoChat, rooms: Rooms, settings: Settings };
     const Component = screenMap[activeTab] || SoloChat;
     return React.createElement('div', { className: 'screen-fade-in', key: activeTab }, React.createElement(Component));
   };
 
   if (loading) {
     return React.createElement('div', { className: 'container-center' },
-      React.createElement('div', { className: 'glass', style: { padding:'2rem', textAlign:'center' } },
+      React.createElement('div', { className: 'glass', style: { padding: '2rem', textAlign: 'center' } },
         React.createElement('div', { className: 'spinner', style: { margin: '0 auto' } })
       )
     );
@@ -84,27 +78,27 @@ function AppContent() {
 
   if (error) {
     return React.createElement('div', { className: 'container-center' },
-      React.createElement('div', { className: 'glass', style: { padding:'2rem', textAlign:'center', maxWidth:'400px' } },
-        React.createElement('h2', { style: { color:'var(--danger)' } }, 'Sign-in Error'),
-        React.createElement('p', { style: { marginBottom:'1rem' } }, error),
-        React.createElement('button', { className:'btn btn-primary', onClick: () => { setError(null); window.location.reload(); } }, 'Try Again')
+      React.createElement('div', { className: 'glass', style: { padding: '2rem', textAlign: 'center', maxWidth: '400px' } },
+        React.createElement('h2', { style: { color: 'var(--danger)' } }, 'Sign‑in Error'),
+        React.createElement('p', { style: { marginBottom: '1rem' } }, error),
+        React.createElement('button', { className: 'btn btn-primary', onClick: () => { setError(null); window.location.reload(); } }, 'Try Again')
       )
     );
   }
 
   if (!userProfile) {
-    return React.createElement(Auth, { onLogin:() => {} });
+    return React.createElement(Auth, { onLogin: () => {} });
   }
 
   const currentUser = auth.currentUser;
   if (currentUser && !currentUser.emailVerified) {
     return React.createElement('div', { className: 'container-center' },
-      React.createElement('div', { className: 'glass', style: { padding:'2rem', textAlign:'center', maxWidth:'400px' } },
+      React.createElement('div', { className: 'glass', style: { padding: '2rem', textAlign: 'center', maxWidth: '400px' } },
         React.createElement('h2', null, 'Verify Your Email'),
-        React.createElement('p', { style: { marginBottom:'1rem', color:'var(--text-secondary)' } }, 'We sent a verification link to ' + currentUser.email + '.'),
-        verificationSent && React.createElement('p', { style: { color:'var(--success)', marginBottom:'1rem' } }, 'Verification email resent!'),
-        React.createElement('button', { className:'btn btn-primary', onClick:resendVerification, style: { marginBottom:'12px', width:'100%' } }, 'Resend Verification Email'),
-        React.createElement('button', { className:'btn', onClick:handleLogout, style: { width:'100%' } }, 'Sign Out')
+        React.createElement('p', { style: { marginBottom: '1rem', color: 'var(--text-secondary)' } }, 'We sent a verification link to ' + currentUser.email + '.'),
+        verificationSent && React.createElement('p', { style: { color: 'var(--success)', marginBottom: '1rem' } }, 'Verification email resent!'),
+        React.createElement('button', { className: 'btn btn-primary', onClick: resendVerification, style: { marginBottom: '12px', width: '100%' } }, 'Resend Verification Email'),
+        React.createElement('button', { className: 'btn', onClick: handleLogout, style: { width: '100%' } }, 'Sign Out')
       )
     );
   }
@@ -138,6 +132,4 @@ function App() {
 }
 
 const root = createRoot(document.getElementById('root'));
-root.render(
-  React.createElement(ThemeProvider, null, React.createElement(App))
-);
+root.render(React.createElement(ThemeProvider, null, React.createElement(App)));
