@@ -17,3 +17,4 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 export const githubProvider = new GithubAuthProvider();
+export const MOVIE_API_KEY = 'trilogy';   // <-- ADD THIS LINE
