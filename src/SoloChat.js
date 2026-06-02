@@ -1,60 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useUser } from './UserContext.js';
-import { useToast } from './ToastContext.js';
-import { MOVIE_API_KEY } from './config.js';
-
-// Quick command buttons
-const QUICK_COMMANDS = ['help', 'weather', 'joke', 'news', 'crypto', 'time', 'clear'];
-
-// Command descriptions (used in predictor and help)
-const COMMAND_DESCRIPTIONS = {
-  help: 'Show all commands',
-  clear: 'Clear the screen',
-  time: 'Current time',
-  date: 'Today\'s date',
-  echo: 'Print text',
-  whoami: 'Your username',
-  version: 'Terminal version',
-  system: 'System info',
-  weather: 'Weather (city)',
-  define: 'Define a word',
-  crypto: 'Crypto price',
-  joke: 'Random joke',
-  news: 'Latest headlines',
-  qr: 'Generate QR code',
-  ip: 'Your public IP',
-  lyrics: 'Song lyrics',
-  movie: 'Movie info',
-  trivia: 'Random trivia',
-  advice: 'Get advice',
-  catfact: 'Cat fact',
-  quote: 'Inspirational quote',
-  numberfact: 'Number fact',
-  calc: 'Evaluate math (e.g., calc 2+2)',
-  currency: 'Convert currency',
-  timezone: 'Time in timezone',
-  install: 'Install app',
-  alias: 'Create alias',
-  unalias: 'Remove alias',
-  aliases: 'List aliases',
-  history: 'Command history',
-  export: 'Export log',
-  cowsay: 'Cow says...',
-  fortune: 'Random fortune',
-  sudo: 'Fake root',
-  uptime: 'Fake uptime',
-  ping: 'Ping host',
-  figlet: 'ASCII art',
-};
 
 export default function SoloChat() {
   const currentUser = useUser();
-  const { addToast } = useToast();
   const userName = useMemo(() => currentUser?.displayName || currentUser?.email || 'guest', [currentUser]);
 
   const [history, setHistory] = useState(() => {
     const saved = localStorage.getItem('cp-terminal-history');
-    return saved ? JSON.parse(saved) : [{ type: 'response', text: 'Welcome to CP Terminal. Type "help" or tap a quick command below.' }];
+    return saved ? JSON.parse(saved) : [ { type: 'response', text: 'Welcome to CP Terminal. Type "help" to get started.' } ];
   });
   const [input, setInput] = useState('');
   const [commandHistory, setCommandHistory] = useState(() => {
@@ -72,50 +25,76 @@ export default function SoloChat() {
   const deferredPromptRef = useRef(null);
   const [installAvailable, setInstallAvailable] = useState(false);
 
-  // Persist state
+  // Persistence
   useEffect(() => { localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-200))); }, [history]);
   useEffect(() => { localStorage.setItem('cp-command-history', JSON.stringify(commandHistory.slice(-100))); }, [commandHistory]);
   useEffect(() => { localStorage.setItem('cp-aliases', JSON.stringify(aliases)); }, [aliases]);
   useEffect(() => { outputRef.current?.scrollTo(0, outputRef.current.scrollHeight); }, [history]);
+
+  // Install prompt
   useEffect(() => {
     const handler = (e) => { e.preventDefault(); deferredPromptRef.current = e; setInstallAvailable(true); };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const allCommands = useMemo(() => {
-    const cmds = Object.keys(COMMAND_DESCRIPTIONS);
-    return [...cmds, ...Object.keys(aliases)];
-  }, [aliases]);
+  const allCommands = useMemo(() => [
+    'help','clear','time','date','echo','whoami','version','calc',
+    'weather','define','crypto','joke','news','qr','ip','fact',
+    'randomuser','timezone','currency','lyrics','movie','install',
+    'alias','unalias','aliases','quote','history','export','cowsay',
+    'fortune','sudo','uptime','ping','figlet', ...Object.keys(aliases)
+  ], [aliases]);
+
+  // Command help with examples
+  const commandHelp = useMemo(() => ({
+    help: 'Show all commands',
+    clear: 'Clear the terminal',
+    time: 'Current time',
+    date: 'Today\'s date',
+    echo: 'Print text (echo hello)',
+    whoami: 'Show your username',
+    version: 'Terminal version',
+    calc: 'Calculate expression (calc 2+3*4)',
+    weather: 'Weather forecast (weather London)',
+    define: 'Define a word (define hello)',
+    crypto: 'Crypto price (crypto bitcoin)',
+    joke: 'Random joke',
+    news: 'Latest headlines (news or news tech)',
+    qr: 'Generate QR code (qr https://example.com)',
+    ip: 'Your public IP',
+    fact: 'Random fact',
+    randomuser: 'Random user profile',
+    timezone: 'Time in timezone (timezone Europe/London)',
+    currency: 'Convert currency (currency 100 USD EUR)',
+    lyrics: 'Song lyrics (lyrics Queen Bohemian Rhapsody)',
+    movie: 'Movie info (movie Inception)',
+    install: 'Install this app as PWA',
+    alias: 'Create alias (alias w weather)',
+    unalias: 'Remove alias (unalias w)',
+    aliases: 'List all aliases',
+    quote: 'Inspirational quote',
+    history: 'Show command history',
+    export: 'Export terminal log as file',
+    cowsay: 'Cow says something (cowsay Hello)',
+    fortune: 'Random fortune cookie',
+    sudo: 'Simulated root access',
+    uptime: 'Simulated uptime',
+    ping: 'Simulated ping (ping google.com)',
+    figlet: 'ASCII art (figlet Hello)'
+  }), []);
 
   const focusInput = () => inputRef.current?.focus();
   useEffect(() => { focusInput(); }, []);
 
-  const fetchWithTimeout = (url, timeout = 5000) =>
-    Promise.race([fetch(url), new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), timeout))]);
+  const fetchWithTimeout = (url, timeout = 5000) => Promise.race([fetch(url), new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), timeout))]);
 
   const formatResponse = (text) => `[${new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}] ${text}`;
-
-  // Predictor logic
-  useEffect(() => {
-    if (!input.trim()) { setSuggestions([]); setSelectedSuggestion(-1); return; }
-    const parts = input.trim().split(/\s+/);
-    const partial = parts[0].toLowerCase();
-    const matches = allCommands.filter(cmd => cmd.startsWith(partial));
-    setSuggestions(matches.slice(0, 8)); // limit to 8
-    setSelectedSuggestion(matches.length > 0 ? 0 : -1);
-  }, [input, allCommands]);
-
-  // Copy response text
-  const copyResponse = (text) => {
-    navigator.clipboard?.writeText(text);
-    addToast('Copied to clipboard', 'success');
-  };
 
   const executeCommand = useCallback(async (rawCmd) => {
     const trimmed = rawCmd.trim();
     if (!trimmed) return;
-    const newHistory = [...history, { type: 'command', text: trimmed }];
+    const newHistory = [...history, { type: 'command', text: `> ${trimmed}` }];
     setCommandHistory(prev => [...prev, trimmed]);
     setHistoryIndex(-1);
     setSuggestions([]);
@@ -127,13 +106,14 @@ export default function SoloChat() {
       main = expansion[0].toLowerCase();
       args = expansion.slice(1).concat(args);
     }
+
     if (main === 'clear') {
       if (history.length > 2) { setShowClearConfirm(true); return; }
       setHistory([]); setInput(''); setShowClearConfirm(false); return;
     }
     if (showClearConfirm) setShowClearConfirm(false);
 
-    const cloudCmds = ['weather','define','crypto','joke','news','qr','ip','fact','randomuser','timezone','currency','lyrics','movie','trivia','advice','catfact','quote','numberfact'];
+    const cloudCmds = ['weather','define','crypto','joke','news','qr','ip','fact','randomuser','timezone','currency','lyrics','movie'];
     if (cloudCmds.includes(main)) {
       setLoading(true);
       setHistory([...newHistory, { type: 'response', text: 'Fetching...' }]);
@@ -141,19 +121,18 @@ export default function SoloChat() {
       try {
         let result = '';
         switch (main) {
-          case 'weather': {
+          case 'weather':
             if (!args[0]) result = 'Usage: weather <city>';
             else {
               const city = args.join(' ');
-              const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=j1`);
+              const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%w`);
               if (!res.ok) throw new Error('City not found');
-              const data = await res.json();
-              const current = data.current_condition[0];
-              result = `Weather in ${city}: ${current.weatherDesc[0].value}, ${current.temp_C}°C (feels like ${current.FeelsLikeC}°C), humidity ${current.humidity}%`;
+              const text = await res.text();
+              if (text.trim().startsWith('<')) throw new Error('Invalid response');
+              result = `Weather in ${city}: ${text.trim()}`;
             }
             break;
-          }
-          case 'define': {
+          case 'define':
             if (!args[0]) result = 'Usage: define <word>';
             else {
               const res = await fetchWithTimeout(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(args[0])}`);
@@ -165,8 +144,7 @@ export default function SoloChat() {
               result = `Definition: ${e.word}\n${defs.trim()}`;
             }
             break;
-          }
-          case 'crypto': {
+          case 'crypto':
             if (!args[0]) result = 'Usage: crypto <coin_id>';
             else {
               const res = await fetchWithTimeout(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(args[0])}&vs_currencies=usd`);
@@ -176,51 +154,61 @@ export default function SoloChat() {
               result = `Price: ${args[0].toUpperCase()} = $${data[args[0]].usd}`;
             }
             break;
-          }
-          case 'joke': {
-            const res = await fetchWithTimeout('https://official-joke-api.appspot.com/random_joke');
-            if (!res.ok) throw new Error('Joke fetch failed');
-            const d = await res.json();
-            result = `${d.setup}\n   ${d.punchline}`;
+          case 'joke':
+            {
+              const res = await fetchWithTimeout('https://official-joke-api.appspot.com/random_joke');
+              if (!res.ok) throw new Error('Joke fetch failed');
+              const d = await res.json();
+              result = `${d.setup}\n   ${d.punchline}`;
+            }
             break;
-          }
           case 'news': {
+            // Improved news using a free API (no key needed)
             try {
-              const res = await fetchWithTimeout('https://feeds.npr.org/1001/rss.xml');
-              const text = await res.text();
-              const items = text.match(/<title>(?!NPR Topics:)([^<]+)<\/title>/g);
-              if (items && items.length > 0) {
-                result = 'Latest from NPR:\n';
-                items.slice(0,5).forEach((t,i) => result += `${i+1}. ${t.replace(/<[^>]+>/g,'')}\n`);
-              } else result = 'No news found.';
-            } catch { result = 'News feed unavailable.'; }
+              const topic = args[0] || 'general';
+              const res = await fetchWithTimeout(`https://inshortsapi.vercel.app/news?category=${topic}`);
+              if (!res.ok) throw new Error('News unavailable');
+              const data = await res.json();
+              if (!data.data || data.data.length === 0) {
+                result = 'No news found for this category.';
+              } else {
+                result = `Top ${topic} headlines:\n`;
+                data.data.slice(0,5).forEach((article, i) => {
+                  result += `${i+1}. ${article.title}\n`;
+                });
+              }
+            } catch {
+              result = 'News feed unavailable. Try again later.';
+            }
             break;
           }
-          case 'qr': {
+          case 'qr':
             if (!args[0]) result = 'Usage: qr <text or url>';
             else result = `QR Code: https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(args.join(' '))}`;
             break;
-          }
-          case 'ip': {
-            const res = await fetchWithTimeout('https://api.ipify.org?format=json');
-            const data = await res.json();
-            result = `Your IP: ${data.ip}`;
+          case 'ip':
+            {
+              const res = await fetchWithTimeout('https://api.ipify.org?format=json');
+              const data = await res.json();
+              result = `Your IP: ${data.ip}`;
+            }
             break;
-          }
-          case 'fact': {
-            const res = await fetchWithTimeout('https://uselessfacts.jsph.pl/random.json?language=en');
-            const data = await res.json();
-            result = `Fact: ${data.text}`;
+          case 'fact':
+            {
+              const res = await fetchWithTimeout('https://uselessfacts.jsph.pl/random.json?language=en');
+              const data = await res.json();
+              result = `Fact: ${data.text}`;
+            }
             break;
-          }
-          case 'randomuser': {
-            const res = await fetchWithTimeout('https://randomuser.me/api/');
-            const data = await res.json();
-            const u = data.results[0];
-            result = `User: ${u.name.first} ${u.name.last}\n   ${u.email}`;
+          case 'randomuser':
+            {
+              const res = await fetchWithTimeout('https://randomuser.me/api/');
+              const data = await res.json();
+              const u = data.results[0];
+              result = `User: ${u.name.first} ${u.name.last}\n   ${u.email}`;
+            }
             break;
-          }
-          case 'timezone': {
+          case 'timezone':
             if (!args[0]) result = 'Usage: timezone <area>/<city>';
             else {
               const res = await fetchWithTimeout(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(args[0])}`);
@@ -229,8 +217,7 @@ export default function SoloChat() {
               result = `Timezone: ${data.timezone} - ${data.datetime.split('T')[1].split('.')[0]}`;
             }
             break;
-          }
-          case 'currency': {
+          case 'currency':
             if (args.length < 3) result = 'Usage: currency <amount> <from> <to> (e.g., currency 100 USD EUR)';
             else {
               const amount = args[0];
@@ -242,8 +229,7 @@ export default function SoloChat() {
               result = `Conversion: ${amount} ${from} = ${data.result} ${to}`;
             }
             break;
-          }
-          case 'lyrics': {
+          case 'lyrics':
             if (args.length < 2) result = 'Usage: lyrics <artist> <song>';
             else {
               const artist = args[0];
@@ -257,11 +243,10 @@ export default function SoloChat() {
               } else result = 'No lyrics found.';
             }
             break;
-          }
-          case 'movie': {
+          case 'movie':
             if (!args[0]) result = 'Usage: movie <title>';
             else {
-              const apiKey = MOVIE_API_KEY || 'trilogy';
+              const apiKey = 'trilogy'; // fallback test key
               const res = await fetchWithTimeout(`https://www.omdbapi.com/?t=${encodeURIComponent(args.join(' '))}&apikey=${apiKey}`);
               if (!res.ok) throw new Error('Movie not found');
               const data = await res.json();
@@ -269,46 +254,6 @@ export default function SoloChat() {
               result = `Movie: ${data.Title} (${data.Year})\nRating: ${data.imdbRating}\nPlot: ${data.Plot}`;
             }
             break;
-          }
-          case 'trivia': {
-            const res = await fetchWithTimeout('https://opentdb.com/api.php?amount=1');
-            if (!res.ok) throw new Error('Trivia not available');
-            const data = await res.json();
-            if (!data.results || data.results.length === 0) throw new Error('No trivia found');
-            const q = data.results[0];
-            const answers = [...q.incorrect_answers, q.correct_answer].sort(() => Math.random() - 0.5);
-            result = `Trivia: ${q.question}\n\n` + answers.map((a, i) => `${i+1}. ${a}`).join('\n') + `\n\nAnswer: ${q.correct_answer}`;
-            break;
-          }
-          case 'advice': {
-            const res = await fetchWithTimeout('https://api.adviceslip.com/advice');
-            if (!res.ok) throw new Error('Advice not available');
-            const data = await res.json();
-            result = `Advice: ${data.slip.advice}`;
-            break;
-          }
-          case 'catfact': {
-            const res = await fetchWithTimeout('https://catfact.ninja/fact');
-            if (!res.ok) throw new Error('Cat fact not available');
-            const data = await res.json();
-            result = `Cat Fact: ${data.fact}`;
-            break;
-          }
-          case 'quote': {
-            const res = await fetchWithTimeout('https://api.quotable.io/random');
-            if (!res.ok) throw new Error('Quote not available');
-            const data = await res.json();
-            result = `"${data.content}" — ${data.author}`;
-            break;
-          }
-          case 'numberfact': {
-            const num = args[0] || 'random';
-            const res = await fetchWithTimeout(`http://numbersapi.com/${num}`);
-            if (!res.ok) throw new Error('Number fact not available');
-            const text = await res.text();
-            result = `Number Fact: ${text}`;
-            break;
-          }
         }
         setHistory(prev => [...prev.slice(0,-1), { type: 'response', text: formatResponse(result) }]);
       } catch (err) {
@@ -319,32 +264,29 @@ export default function SoloChat() {
     }
 
     // Local commands
-    let response = ''; let isError = false;
+    let response = '';
+    let isError = false;
     switch (main) {
       case 'help': {
-        const groups = {
-          'General': ['help','clear','time','date','echo','whoami','version','system'],
-          'Internet': ['weather','define','crypto','joke','news','qr','ip','lyrics','movie'],
-          'Fun': ['trivia','advice','catfact','quote','numberfact','cowsay','fortune','figlet','randomuser'],
-          'Math/Finance': ['calc','currency','timezone'],
-          'Aliases': ['alias','unalias','aliases'],
-          'System': ['install','history','export','sudo','uptime','ping']
-        };
-        let helpText = '\n  ╔════════════════════════════════╗\n';
-        for (const [group, cmds] of Object.entries(groups)) {
-          helpText += `  ║  ${group.toUpperCase().padEnd(26)} ║\n`;
-          cmds.forEach(cmd => {
-            const desc = COMMAND_DESCRIPTIONS[cmd] || '';
-            helpText += `  ║  ${cmd.padEnd(14)} ${desc.padEnd(12)} ║\n`;
+        const entries = Object.entries(commandHelp);
+        const pageSize = 8;
+        let page = 1;
+        if (args.length === 2 && args[0] === 'page') { page = parseInt(args[1],10) || 1; }
+        const start = (page-1)*pageSize;
+        const pageEntries = entries.slice(start, start+pageSize);
+        if (pageEntries.length === 0) {
+          response = `No more commands. (Page ${page})`;
+        } else {
+          let helpText = `Commands (Page ${page}/${Math.ceil(entries.length/pageSize)})\n\n`;
+          pageEntries.forEach(([cmd, desc]) => {
+            helpText += `  ${cmd.padEnd(14)} ${desc}\n`;
           });
-          helpText += '  ╠════════════════════════════════╣\n';
+          helpText += '\nType a command and its arguments.';
+          response = helpText;
         }
-        helpText += '  ║  Type any command to use it.   ║\n';
-        helpText += '  ╚════════════════════════════════╝\n';
-        response = helpText;
         break;
       }
-      case 'install': {
+      case 'install':
         if (deferredPromptRef.current) {
           try {
             deferredPromptRef.current.prompt();
@@ -355,19 +297,15 @@ export default function SoloChat() {
         } else if (installAvailable) response = 'Install prompt ready. Try again.';
         else response = 'Install not available. Tap browser menu and select "Add to Home screen".';
         break;
-      }
-      case 'system': {
-        response = `CP Terminal v3.0\nUser: ${userName}\nPlatform: ${navigator.platform}\nUser Agent: ${navigator.userAgent}`;
-        break;
-      }
       case 'time': response = new Date().toLocaleTimeString(); break;
       case 'date': response = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }); break;
       case 'echo': response = args.join(' '); break;
       case 'whoami': response = userName; break;
-      case 'version': response = 'CP Terminal v3.0'; break;
+      case 'version': response = 'CP Terminal v3.1'; break;
       case 'calc': {
         try {
-          const expr = args.join(''); if (!expr) throw new Error('No expression');
+          const expr = args.join('');
+          if (!expr) throw new Error('No expression');
           const sanitized = expr.replace(/[^0-9+\-*/().%\s]/g, '');
           if (sanitized !== expr.replace(/\s/g,'')) throw new Error('Invalid characters');
           const result = Function('"use strict"; return (' + sanitized + ')')();
@@ -378,14 +316,8 @@ export default function SoloChat() {
       }
       case 'quote': response = '"The only way to do great work is to love what you do." – Steve Jobs'; break;
       case 'history': {
-        if (args[0] === 'search' && args[1]) {
-          const term = args.slice(1).join(' ').toLowerCase();
-          const filtered = commandHistory.filter(c => c.toLowerCase().includes(term));
-          response = filtered.length ? `History (matching "${term}"):\n` + filtered.map((c,i) => `${i+1}. ${c}`).join('\n') : 'No matching commands found.';
-        } else {
-          const list = commandHistory.map((c,i) => `${i+1}. ${c}`).join('\n');
-          response = list ? `Command History:\n${list}` : 'No commands yet.';
-        }
+        const list = commandHistory.map((c,i) => `${i+1}. ${c}`).join('\n');
+        response = list ? `Command History:\n${list}` : 'No commands yet.';
         break;
       }
       case 'export': {
@@ -413,26 +345,12 @@ export default function SoloChat() {
         break;
       }
       case 'fortune': {
-        const fortunes = [
-          'The early bird gets the worm, but the second mouse gets the cheese.',
-          'A journey of a thousand miles begins with a single step.',
-          'All that glitters is not gold.',
-          'Actions speak louder than words.',
-          'You can\'t have your cake and eat it too.',
-          'The best time to plant a tree was 20 years ago. The second best time is now.',
-          'Be yourself; everyone else is already taken.',
-          'You miss 100% of the shots you don\'t take.'
-        ];
-        const random = fortunes[Math.floor(Math.random() * fortunes.length)];
-        response = `Fortune: ${random}`;
+        const fortunes = ['The early bird gets the worm, but the second mouse gets the cheese.','A journey of a thousand miles begins with a single step.','All that glitters is not gold.','Actions speak louder than words.'];
+        response = `Fortune: ${fortunes[Math.floor(Math.random()*fortunes.length)]}`;
         break;
       }
       case 'sudo': response = 'Sorry, you are not root.'; break;
-      case 'uptime': {
-        const fake = Math.floor(Math.random()*10000) + 100;
-        response = `Uptime: ${fake} hours (simulated)`;
-        break;
-      }
+      case 'uptime': response = `Uptime: ${Math.floor(Math.random()*10000)+100} hours (simulated)`; break;
       case 'ping': {
         if (!args[0]) response = 'Usage: ping <host>';
         else {
@@ -450,12 +368,7 @@ export default function SoloChat() {
       }
       case 'alias': {
         if (args.length < 2) response = 'Usage: alias <short> <command>';
-        else {
-          const short = args[0];
-          const full = args.slice(1).join(' ');
-          setAliases(prev => ({ ...prev, [short]: full }));
-          response = `Alias set: ${short} -> ${full}`;
-        }
+        else { setAliases(prev => ({ ...prev, [args[0]]: args.slice(1).join(' ') })); response = `Alias set: ${args[0]} -> ${args.slice(1).join(' ')}`; }
         break;
       }
       case 'unalias': {
@@ -470,43 +383,33 @@ export default function SoloChat() {
         break;
       }
       case 'aliases': {
-        if (Object.keys(aliases).length === 0) response = 'No aliases set.';
-        else response = 'Aliases:\n' + Object.entries(aliases).map(([k,v]) => `  ${k} -> ${v}`).join('\n');
+        const list = Object.entries(aliases);
+        response = list.length ? 'Aliases:\n' + list.map(([k,v]) => `  ${k} -> ${v}`).join('\n') : 'No aliases set.';
         break;
       }
       default: response = `Command not found: ${main}. Type "help".`; isError = true;
     }
+
     setHistory([...newHistory, { type: isError ? 'error' : 'response', text: formatResponse(response) }]);
     setInput('');
-  }, [history, aliases, showClearConfirm, userName, installAvailable]);
+  }, [history, aliases, showClearConfirm, userName, commandHelp, installAvailable]);
 
   const confirmClear = (conf) => { if (conf) { setHistory([]); setInput(''); } setShowClearConfirm(false); };
 
-  const selectSuggestion = (cmd) => {
-    setInput(cmd + ' ');
-    setSuggestions([]);
-    inputRef.current?.focus();
+  // Autocomplete
+  const complete = () => {
+    const partial = input.trim().split(/\s+/)[0].toLowerCase();
+    const matches = allCommands.filter(cmd => cmd.startsWith(partial));
+    if (matches.length === 1) { setInput(matches[0] + ' '); setSuggestions([]); }
+    else if (matches.length > 1) { setSuggestions(matches); setSelectedSuggestion(0); }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      if (suggestions.length === 1) {
-        selectSuggestion(suggestions[0]);
-      } else if (suggestions.length > 1) {
-        setSelectedSuggestion(prev => (prev + 1) % suggestions.length);
-      }
-    } else if (e.key === 'Enter') {
-      if (suggestions.length > 0 && selectedSuggestion >= 0) {
-        e.preventDefault();
-        selectSuggestion(suggestions[selectedSuggestion]);
-        return;
-      }
-      executeCommand(input);
-    } else if (e.key === 'ArrowUp') {
+    if (e.key === 'Tab') { e.preventDefault(); complete(); }
+    else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (suggestions.length > 0) {
-        setSelectedSuggestion(prev => (prev - 1 + suggestions.length) % suggestions.length);
+        setSelectedSuggestion(prev => (prev <= 0 ? suggestions.length-1 : prev-1));
       } else {
         const newIndex = historyIndex === -1 ? commandHistory.length-1 : Math.max(0, historyIndex-1);
         setHistoryIndex(newIndex);
@@ -515,110 +418,75 @@ export default function SoloChat() {
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (suggestions.length > 0) {
-        setSelectedSuggestion(prev => (prev + 1) % suggestions.length);
+        setSelectedSuggestion(prev => (prev >= suggestions.length-1 ? 0 : prev+1));
       } else {
         const newIndex = historyIndex + 1;
         if (newIndex < commandHistory.length) { setHistoryIndex(newIndex); setInput(commandHistory[newIndex]); }
         else { setHistoryIndex(-1); setInput(''); }
       }
+    } else if (e.key === 'Enter') {
+      if (suggestions.length > 0 && selectedSuggestion >= 0) {
+        e.preventDefault();
+        setInput(suggestions[selectedSuggestion] + ' ');
+        setSuggestions([]); setSelectedSuggestion(-1);
+        return;
+      }
+      executeCommand(input);
     }
   };
 
-  // Render output lines with copy button for each response
-  const outputElements = history.map((entry, idx) => {
-    const className = `terminal-line ${entry.type}${entry.type === 'response' ? ' response-card' : ''}`;
-    if (entry.type === 'response' || entry.type === 'error') {
-      return React.createElement('div', { key: idx, className, style: { position: 'relative' } },
-        React.createElement('span', null, entry.text),
-        React.createElement('button', {
-          className: 'btn-icon copy-btn',
-          onClick: () => copyResponse(entry.text),
-          title: 'Copy',
-          style: { position: 'absolute', top: '4px', right: '4px', fontSize: '0.7rem', opacity: 0.5 }
-        }, React.createElement('i', { className: 'ph ph-copy-simple' }))
-      );
-    }
-    return React.createElement('div', { key: idx, className }, entry.text);
-  });
+  const outputElements = history.map((entry, idx) =>
+    React.createElement('div', { key: idx, className: `terminal-line ${entry.type}${entry.type==='response'?' response-card':''}` }, entry.text)
+  );
 
   const clearConfirmDialog = showClearConfirm ? React.createElement('div', { className: 'terminal-clear-confirm glass' },
-    React.createElement('p', null, 'Clear the terminal? All output will be lost.'),
-    React.createElement('div', { style: { display:'flex', gap:'8px', marginTop:'8px' } },
-      React.createElement('button', { className: 'btn btn-primary', onClick: () => confirmClear(true) }, 'Yes'),
-      React.createElement('button', { className: 'btn', onClick: () => confirmClear(false) }, 'No')
+    React.createElement('p', null, 'Clear the terminal?'),
+    React.createElement('div', { style:{ display:'flex', gap:'8px', marginTop:'8px' } },
+      React.createElement('button', { className:'btn btn-primary', onClick:() => confirmClear(true) }, 'Yes'),
+      React.createElement('button', { className:'btn', onClick:() => confirmClear(false) }, 'No')
     )
   ) : null;
 
-  // Predictor dropdown
-  const predictor = suggestions.length > 0 ? React.createElement('div', { className: 'terminal-predictor glass' },
-    suggestions.map((cmd, i) =>
+  const suggestionList = suggestions.length > 0 ? React.createElement('div', { className:'terminal-suggestions glass' },
+    suggestions.map((s, i) =>
       React.createElement('div', {
-        key: cmd,
-        className: `predictor-item${i === selectedSuggestion ? ' selected' : ''}`,
-        onMouseDown: (e) => { e.preventDefault(); selectSuggestion(cmd); }
-      },
-        React.createElement('i', { className: 'ph ph-terminal-window', style: { marginRight: '8px', opacity: 0.6 } }),
-        React.createElement('span', { style: { flex: 1 } }, cmd),
-        React.createElement('span', { style: { fontSize: '0.7rem', opacity: 0.5, marginLeft: '8px' } }, COMMAND_DESCRIPTIONS[cmd] || '')
-      )
+        key: s, className: `suggestion-item${i===selectedSuggestion?' selected':''}`,
+        onClick: () => { setInput(s + ' '); setSuggestions([]); inputRef.current.focus(); }
+      }, s)
     )
   ) : null;
 
-  // Quick command buttons
-  const quickCommandsBar = React.createElement('div', { className: 'quick-commands' },
-    QUICK_COMMANDS.map(cmd =>
-      React.createElement('button', {
-        key: cmd,
-        className: 'btn btn-small',
-        onClick: () => executeCommand(cmd),
-      }, cmd)
-    )
-  );
-
-  const inputLine = React.createElement('div', { className: 'terminal-line command', style: { display:'flex' } },
-    React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
-    React.createElement('span', null, input || (loading ? '...' : '')),
-    loading && React.createElement('span', { className: 'blinking-cursor' })
-  );
-
-  return React.createElement('div', { className: 'terminal', onClick: focusInput },
-    React.createElement('div', { className: 'terminal-header' },
-      React.createElement('span', { className: 'terminal-title' }, 'CP Terminal'),
-      React.createElement('div', { className: 'terminal-header-actions' },
-        installAvailable && React.createElement('button', { className: 'btn-icon', title: 'Install App', onClick: () => executeCommand('install') },
-          React.createElement('i', { className: 'ph ph-download-simple' })),
-        React.createElement('button', { className: 'btn-icon', title: 'Clear', onClick: () => { if (history.length > 2) setShowClearConfirm(true); else { setHistory([]); setInput(''); } } },
-          React.createElement('i', { className: 'ph ph-broom' }))
+  return React.createElement('div', { className:'terminal', onClick: focusInput },
+    React.createElement('div', { className:'terminal-header' },
+      React.createElement('span', { className:'terminal-title' }, 'CP Terminal'),
+      React.createElement('div', { className:'terminal-header-actions' },
+        installAvailable && React.createElement('button', { className:'btn-icon', onClick:() => executeCommand('install'), title:'Install App' },
+          React.createElement('i', { className:'ph ph-download-simple' })),
+        React.createElement('button', { className:'btn-icon', onClick:() => { if (history.length > 2) setShowClearConfirm(true); else { setHistory([]); setInput(''); } }, title:'Clear terminal' },
+          React.createElement('i', { className:'ph ph-broom' }))
       )
     ),
-    quickCommandsBar,
-    React.createElement('div', { className: 'terminal-output', ref: outputRef },
+    React.createElement('div', { className:'terminal-output', ref: outputRef },
       ...outputElements,
-      inputLine,
-      clearConfirmDialog,
-      predictor
+      React.createElement('div', { style:{ display:'flex' } },
+        React.createElement('span', { className:'terminal-prompt' }, userName + ' ~ '),
+        React.createElement('span', null, input || (loading ? '...' : '')),
+        loading && React.createElement('span', { className:'blinking-cursor' })
+      ),
+      clearConfirmDialog
     ),
-    React.createElement('div', { className: 'terminal-input-area' },
-      React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
-      React.createElement('input', { ref: inputRef, type:'text', className:'terminal-input', value:input,
-        onChange: (e) => setInput(e.target.value),
+    suggestionList,
+    React.createElement('div', { className:'terminal-input-area' },
+      React.createElement('span', { className:'terminal-prompt' }, userName + ' ~ '),
+      React.createElement('input', {
+        ref: inputRef, type:'text', className:'terminal-input', value:input,
+        onChange: (e) => { setInput(e.target.value); setSuggestions([]); setSelectedSuggestion(-1); },
         onKeyDown: handleKeyDown, placeholder:'Type a command...', spellCheck:false, autoComplete:'off', autoFocus:true, disabled:loading
       }),
       loading && React.createElement('span', { className:'spinner', style:{ marginLeft:'8px' } }),
-      React.createElement('button', { className:'btn btn-primary send-btn', onClick: () => executeCommand(input), disabled: loading || !input.trim(),
-        style:{ marginLeft:'8px', padding:'10px 16px', borderRadius:'12px' } },
+      React.createElement('button', { className:'btn btn-primary send-btn', onClick:() => executeCommand(input), disabled: loading || !input.trim() },
         React.createElement('i', { className:'ph ph-paper-plane-right' }))
     ),
-    React.createElement('style', null, `
-      @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0 } }
-      .blinking-cursor { display:inline-block; width:8px; height:1.2em; background:var(--accent-light); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:text-bottom; }
-      .terminal-predictor { position:absolute; bottom:70px; left:0; right:0; max-height:160px; overflow-y:auto; z-index:10; padding:8px; border-radius:12px; margin:0 4px; animation: fadeIn 0.2s ease; }
-      .predictor-item { padding:6px 12px; cursor:pointer; display:flex; align-items:center; border-radius:8px; transition: background 0.2s; }
-      .predictor-item:hover, .predictor-item.selected { background:var(--surface-hover); }
-      .quick-commands { display:flex; gap:6px; padding:8px 16px; overflow-x:auto; border-bottom:1px solid var(--border); margin-bottom:4px; }
-      .quick-commands .btn { padding:6px 12px; font-size:0.75rem; border-radius:20px; white-space:nowrap; }
-      .copy-btn { transition: opacity 0.2s; }
-      .copy-btn:hover { opacity:1 !important; }
-    `)
+    React.createElement('style', null, `@keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0 } .blinking-cursor { display:inline-block; width:8px; height:1.2em; background:var(--accent-light); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:text-bottom; }`)
   );
-    }
+            }
