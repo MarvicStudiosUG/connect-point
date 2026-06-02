@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useUser } from './UserContext.js';
+import { MOVIE_API_KEY } from './config.js';
+import { getVaultNotes, createVaultNote, updateVaultNote, deleteVaultNote, verifyVaultPassword, setVaultPassword } from './db.js';
 
 export default function SoloChat() {
   const currentUser = useUser();
@@ -7,7 +9,7 @@ export default function SoloChat() {
 
   const [history, setHistory] = useState(() => {
     const saved = localStorage.getItem('cp-terminal-history');
-    return saved ? JSON.parse(saved) : [ { type: 'response', text: 'Welcome to CP Terminal. Type "help" to get started.' } ];
+    return saved ? JSON.parse(saved) : [ { type:'response', text:'Welcome to CP Terminal. Type "help" to get started.' } ];
   });
   const [input, setInput] = useState('');
   const [commandHistory, setCommandHistory] = useState(() => {
@@ -25,7 +27,7 @@ export default function SoloChat() {
   const deferredPromptRef = useRef(null);
   const [installAvailable, setInstallAvailable] = useState(false);
 
-  // Persistence
+  // Persist
   useEffect(() => { localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-200))); }, [history]);
   useEffect(() => { localStorage.setItem('cp-command-history', JSON.stringify(commandHistory.slice(-100))); }, [commandHistory]);
   useEffect(() => { localStorage.setItem('cp-aliases', JSON.stringify(aliases)); }, [aliases]);
@@ -38,50 +40,53 @@ export default function SoloChat() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  // All commands for autocomplete
   const allCommands = useMemo(() => [
     'help','clear','time','date','echo','whoami','version','calc',
     'weather','define','crypto','joke','news','qr','ip','fact',
     'randomuser','timezone','currency','lyrics','movie','install',
     'alias','unalias','aliases','quote','history','export','cowsay',
-    'fortune','sudo','uptime','ping','figlet', ...Object.keys(aliases)
+    'fortune','sudo','uptime','ping','figlet',
+    'vault',        // sub-commands: list, add, edit, delete, setpass
+    ...Object.keys(aliases)
   ], [aliases]);
 
-  // Command help with examples
   const commandHelp = useMemo(() => ({
-    help: 'Show all commands',
-    clear: 'Clear the terminal',
-    time: 'Current time',
-    date: 'Today\'s date',
-    echo: 'Print text (echo hello)',
-    whoami: 'Show your username',
-    version: 'Terminal version',
-    calc: 'Calculate expression (calc 2+3*4)',
-    weather: 'Weather forecast (weather London)',
-    define: 'Define a word (define hello)',
-    crypto: 'Crypto price (crypto bitcoin)',
-    joke: 'Random joke',
-    news: 'Latest headlines (news or news tech)',
-    qr: 'Generate QR code (qr https://example.com)',
-    ip: 'Your public IP',
-    fact: 'Random fact',
-    randomuser: 'Random user profile',
-    timezone: 'Time in timezone (timezone Europe/London)',
-    currency: 'Convert currency (currency 100 USD EUR)',
-    lyrics: 'Song lyrics (lyrics Queen Bohemian Rhapsody)',
-    movie: 'Movie info (movie Inception)',
-    install: 'Install this app as PWA',
-    alias: 'Create alias (alias w weather)',
-    unalias: 'Remove alias (unalias w)',
-    aliases: 'List all aliases',
-    quote: 'Inspirational quote',
-    history: 'Show command history',
-    export: 'Export terminal log as file',
-    cowsay: 'Cow says something (cowsay Hello)',
-    fortune: 'Random fortune cookie',
-    sudo: 'Simulated root access',
-    uptime: 'Simulated uptime',
-    ping: 'Simulated ping (ping google.com)',
-    figlet: 'ASCII art (figlet Hello)'
+    help:'Show all commands',
+    clear:'Clear the terminal',
+    time:'Current time',
+    date:'Today\'s date',
+    echo:'Print text (echo hello)',
+    whoami:'Show your username',
+    version:'Terminal version',
+    calc:'Calculate expression (calc 2+3*4)',
+    weather:'Weather forecast (weather London)',
+    define:'Define a word (define hello)',
+    crypto:'Crypto price (crypto bitcoin)',
+    joke:'Random joke',
+    news:'Latest headlines (news or news tech)',
+    qr:'Generate QR code (qr https://example.com)',
+    ip:'Your public IP',
+    fact:'Random fact',
+    randomuser:'Random user profile',
+    timezone:'Time in timezone (timezone Europe/London)',
+    currency:'Convert currency (currency 100 USD EUR)',
+    lyrics:'Song lyrics (lyrics Queen Bohemian Rhapsody)',
+    movie:'Movie info (movie Inception)',
+    install:'Install this app as PWA',
+    alias:'Create alias (alias w weather)',
+    unalias:'Remove alias (unalias w)',
+    aliases:'List all aliases',
+    quote:'Inspirational quote',
+    history:'Show command history',
+    export:'Export terminal log as file',
+    cowsay:'Cow says something (cowsay Hello)',
+    fortune:'Random fortune cookie',
+    sudo:'Simulated root access',
+    uptime:'Simulated uptime',
+    ping:'Simulated ping (ping google.com)',
+    figlet:'ASCII art (figlet Hello)',
+    vault:'Manage vault (vault list <password>, vault add <password> "title" "content", vault edit <password> <id> "new content", vault delete <password> <id>, vault setpass <oldPassword> <newPassword>)'
   }), []);
 
   const focusInput = () => inputRef.current?.focus();
@@ -94,7 +99,7 @@ export default function SoloChat() {
   const executeCommand = useCallback(async (rawCmd) => {
     const trimmed = rawCmd.trim();
     if (!trimmed) return;
-    const newHistory = [...history, { type: 'command', text: `> ${trimmed}` }];
+    const newHistory = [...history, { type:'command', text:`> ${trimmed}` }];
     setCommandHistory(prev => [...prev, trimmed]);
     setHistoryIndex(-1);
     setSuggestions([]);
@@ -113,10 +118,11 @@ export default function SoloChat() {
     }
     if (showClearConfirm) setShowClearConfirm(false);
 
+    // Cloud commands
     const cloudCmds = ['weather','define','crypto','joke','news','qr','ip','fact','randomuser','timezone','currency','lyrics','movie'];
     if (cloudCmds.includes(main)) {
       setLoading(true);
-      setHistory([...newHistory, { type: 'response', text: 'Fetching...' }]);
+      setHistory([...newHistory, { type:'response', text:'Fetching...' }]);
       setInput('');
       try {
         let result = '';
@@ -162,8 +168,7 @@ export default function SoloChat() {
               result = `${d.setup}\n   ${d.punchline}`;
             }
             break;
-          case 'news': {
-            // Improved news using a free API (no key needed)
+          case 'news':
             try {
               const topic = args[0] || 'general';
               const res = await fetchWithTimeout(`https://inshortsapi.vercel.app/news?category=${topic}`);
@@ -177,11 +182,8 @@ export default function SoloChat() {
                   result += `${i+1}. ${article.title}\n`;
                 });
               }
-            } catch {
-              result = 'News feed unavailable. Try again later.';
-            }
+            } catch { result = 'News feed unavailable.'; }
             break;
-          }
           case 'qr':
             if (!args[0]) result = 'Usage: qr <text or url>';
             else result = `QR Code: https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(args.join(' '))}`;
@@ -246,7 +248,7 @@ export default function SoloChat() {
           case 'movie':
             if (!args[0]) result = 'Usage: movie <title>';
             else {
-              const apiKey = 'trilogy'; // fallback test key
+              const apiKey = MOVIE_API_KEY || 'trilogy';
               const res = await fetchWithTimeout(`https://www.omdbapi.com/?t=${encodeURIComponent(args.join(' '))}&apikey=${apiKey}`);
               if (!res.ok) throw new Error('Movie not found');
               const data = await res.json();
@@ -255,12 +257,117 @@ export default function SoloChat() {
             }
             break;
         }
-        setHistory(prev => [...prev.slice(0,-1), { type: 'response', text: formatResponse(result) }]);
+        setHistory(prev => [...prev.slice(0,-1), { type:'response', text: formatResponse(result) }]);
       } catch (err) {
-        setHistory(prev => [...prev.slice(0,-1), { type: 'error', text: formatResponse('Error: ' + err.message) }]);
+        setHistory(prev => [...prev.slice(0,-1), { type:'error', text: formatResponse('Error: ' + err.message) }]);
       }
       setLoading(false);
       return;
+    }
+
+    // ---- Vault commands ----
+    if (main === 'vault') {
+      if (args.length === 0) {
+        const entry = { type:'error', text: formatResponse('Usage: vault <action> [arguments]. Try "help vault".') };
+        setHistory([...newHistory, entry]);
+        setInput('');
+        return;
+      }
+      const action = args[0].toLowerCase();
+      const passArgs = args.slice(1);
+      // For all vault actions, first argument must be the vault password
+      if (action === 'setpass') {
+        // vault setpass <oldPassword> <newPassword>
+        if (passArgs.length < 2) {
+          setHistory([...newHistory, { type:'error', text: formatResponse('Usage: vault setpass <oldPassword> <newPassword>') }]);
+          setInput('');
+          return;
+        }
+        const oldPass = passArgs[0];
+        const newPass = passArgs[1];
+        const valid = await verifyVaultPassword(currentUser.uid, oldPass);
+        if (!valid) {
+          setHistory([...newHistory, { type:'error', text: formatResponse('Incorrect old password.') }]);
+          setInput('');
+          return;
+        }
+        await setVaultPassword(currentUser.uid, newPass);
+        setHistory([...newHistory, { type:'response', text: formatResponse('Vault password updated.') }]);
+        setInput('');
+        return;
+      } else {
+        // All other vault actions: vault list <password>, vault add <password> "title" "content", etc.
+        if (passArgs.length === 0) {
+          setHistory([...newHistory, { type:'error', text: formatResponse('Vault password required.') }]);
+          setInput('');
+          return;
+        }
+        const password = passArgs[0];
+        const rest = passArgs.slice(1);
+        const valid = await verifyVaultPassword(currentUser.uid, password);
+        if (!valid) {
+          setHistory([...newHistory, { type:'error', text: formatResponse('Incorrect vault password.') }]);
+          setInput('');
+          return;
+        }
+
+        try {
+          let result = '';
+          switch (action) {
+            case 'list': {
+              const notes = await getVaultNotes(currentUser.uid);
+              if (notes.length === 0) result = 'Vault is empty.';
+              else {
+                result = 'Vault notes:\n' + notes.map((n, i) => `${i+1}. ${n.title} (id: ${n.id})`).join('\n');
+              }
+              break;
+            }
+            case 'add': {
+              // vault add <password> "title" "content"
+              const argsStr = rest.join(' ');
+              const match = argsStr.match(/^"(.+?)"\s*"([\s\S]*?)"$/);
+              if (!match) {
+                result = 'Usage: vault add <password> "title" "content"';
+                break;
+              }
+              const title = match[1];
+              const content = match[2];
+              await createVaultNote(currentUser.uid, title, content);
+              result = `Note "${title}" added.`;
+              break;
+            }
+            case 'edit': {
+              // vault edit <password> <noteId> "new content"
+              if (rest.length < 2) {
+                result = 'Usage: vault edit <password> <noteId> "new content"';
+                break;
+              }
+              const noteId = rest[0];
+              const newContent = rest.slice(1).join(' ').replace(/^"|"$/g, '');
+              await updateVaultNote(currentUser.uid, noteId, { content: newContent });
+              result = `Note ${noteId} updated.`;
+              break;
+            }
+            case 'delete': {
+              if (rest.length < 1) {
+                result = 'Usage: vault delete <password> <noteId>';
+                break;
+              }
+              const noteId = rest[0];
+              await deleteVaultNote(currentUser.uid, noteId);
+              result = `Note ${noteId} deleted.`;
+              break;
+            }
+            default:
+              result = `Unknown vault action: ${action}. Try: list, add, edit, delete, setpass.`;
+          }
+          setHistory([...newHistory, { type:'response', text: formatResponse(result) }]);
+        } catch (err) {
+          setHistory([...newHistory, { type:'error', text: formatResponse('Error: ' + err.message) }]);
+        }
+        setInput('');
+        return;
+      }
     }
 
     // Local commands
@@ -278,10 +385,8 @@ export default function SoloChat() {
           response = `No more commands. (Page ${page})`;
         } else {
           let helpText = `Commands (Page ${page}/${Math.ceil(entries.length/pageSize)})\n\n`;
-          pageEntries.forEach(([cmd, desc]) => {
-            helpText += `  ${cmd.padEnd(14)} ${desc}\n`;
-          });
-          helpText += '\nType a command and its arguments.';
+          pageEntries.forEach(([cmd, desc]) => { helpText += `  ${cmd.padEnd(14)} ${desc}\n`; });
+          helpText += '\nFor detailed help on a command, type "help <command>".';
           response = helpText;
         }
         break;
@@ -301,7 +406,7 @@ export default function SoloChat() {
       case 'date': response = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }); break;
       case 'echo': response = args.join(' '); break;
       case 'whoami': response = userName; break;
-      case 'version': response = 'CP Terminal v3.1'; break;
+      case 'version': response = 'CP Terminal v3.2 – Vault Edition'; break;
       case 'calc': {
         try {
           const expr = args.join('');
@@ -392,54 +497,82 @@ export default function SoloChat() {
 
     setHistory([...newHistory, { type: isError ? 'error' : 'response', text: formatResponse(response) }]);
     setInput('');
-  }, [history, aliases, showClearConfirm, userName, commandHelp, installAvailable]);
+  }, [history, aliases, showClearConfirm, userName, commandHelp, installAvailable, currentUser]);
 
   const confirmClear = (conf) => { if (conf) { setHistory([]); setInput(''); } setShowClearConfirm(false); };
 
-  // Autocomplete
-  const complete = () => {
+  // ---- AUTOCOMPLETE ----
+  const complete = useCallback(() => {
     const partial = input.trim().split(/\s+/)[0].toLowerCase();
+    if (!partial) { setSuggestions([]); return; }
     const matches = allCommands.filter(cmd => cmd.startsWith(partial));
-    if (matches.length === 1) { setInput(matches[0] + ' '); setSuggestions([]); }
-    else if (matches.length > 1) { setSuggestions(matches); setSelectedSuggestion(0); }
-  };
+    if (matches.length === 1) {
+      setInput(matches[0] + ' ');
+      setSuggestions([]);
+      setSelectedSuggestion(-1);
+    } else if (matches.length > 1) {
+      setSuggestions(matches);
+      setSelectedSuggestion(0);
+    } else {
+      setSuggestions([]);
+      setSelectedSuggestion(-1);
+    }
+  }, [input, allCommands]);
+
+  useEffect(() => {
+    complete();
+  }, [input, complete]);
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Tab') { e.preventDefault(); complete(); }
-    else if (e.key === 'ArrowUp') {
+    if (e.key === 'Tab') {
       e.preventDefault();
       if (suggestions.length > 0) {
-        setSelectedSuggestion(prev => (prev <= 0 ? suggestions.length-1 : prev-1));
+        // select the highlighted suggestion
+        setInput(suggestions[selectedSuggestion >= 0 ? selectedSuggestion : 0] + ' ');
+        setSuggestions([]);
+        setSelectedSuggestion(-1);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (suggestions.length > 0) {
+        setSelectedSuggestion(prev => (prev <= 0 ? suggestions.length - 1 : prev - 1));
       } else {
-        const newIndex = historyIndex === -1 ? commandHistory.length-1 : Math.max(0, historyIndex-1);
+        const newIndex = historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
         setHistoryIndex(newIndex);
         if (commandHistory[newIndex]) setInput(commandHistory[newIndex]);
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (suggestions.length > 0) {
-        setSelectedSuggestion(prev => (prev >= suggestions.length-1 ? 0 : prev+1));
+        setSelectedSuggestion(prev => (prev >= suggestions.length - 1 ? 0 : prev + 1));
       } else {
         const newIndex = historyIndex + 1;
-        if (newIndex < commandHistory.length) { setHistoryIndex(newIndex); setInput(commandHistory[newIndex]); }
-        else { setHistoryIndex(-1); setInput(''); }
+        if (newIndex < commandHistory.length) {
+          setHistoryIndex(newIndex);
+          setInput(commandHistory[newIndex]);
+        } else {
+          setHistoryIndex(-1);
+          setInput('');
+        }
       }
     } else if (e.key === 'Enter') {
       if (suggestions.length > 0 && selectedSuggestion >= 0) {
         e.preventDefault();
         setInput(suggestions[selectedSuggestion] + ' ');
-        setSuggestions([]); setSelectedSuggestion(-1);
+        setSuggestions([]);
+        setSelectedSuggestion(-1);
         return;
       }
       executeCommand(input);
     }
   };
 
+  // ---- RENDER ----
   const outputElements = history.map((entry, idx) =>
     React.createElement('div', { key: idx, className: `terminal-line ${entry.type}${entry.type==='response'?' response-card':''}` }, entry.text)
   );
 
-  const clearConfirmDialog = showClearConfirm ? React.createElement('div', { className: 'terminal-clear-confirm glass' },
+  const clearConfirmDialog = showClearConfirm ? React.createElement('div', { className:'terminal-clear-confirm glass' },
     React.createElement('p', null, 'Clear the terminal?'),
     React.createElement('div', { style:{ display:'flex', gap:'8px', marginTop:'8px' } },
       React.createElement('button', { className:'btn btn-primary', onClick:() => confirmClear(true) }, 'Yes'),
@@ -450,8 +583,9 @@ export default function SoloChat() {
   const suggestionList = suggestions.length > 0 ? React.createElement('div', { className:'terminal-suggestions glass' },
     suggestions.map((s, i) =>
       React.createElement('div', {
-        key: s, className: `suggestion-item${i===selectedSuggestion?' selected':''}`,
-        onClick: () => { setInput(s + ' '); setSuggestions([]); inputRef.current.focus(); }
+        key: s,
+        className: `suggestion-item${i === selectedSuggestion ? ' selected' : ''}`,
+        onMouseDown: () => { setInput(s + ' '); setSuggestions([]); inputRef.current.focus(); }
       }, s)
     )
   ) : null;
@@ -480,8 +614,9 @@ export default function SoloChat() {
       React.createElement('span', { className:'terminal-prompt' }, userName + ' ~ '),
       React.createElement('input', {
         ref: inputRef, type:'text', className:'terminal-input', value:input,
-        onChange: (e) => { setInput(e.target.value); setSuggestions([]); setSelectedSuggestion(-1); },
-        onKeyDown: handleKeyDown, placeholder:'Type a command...', spellCheck:false, autoComplete:'off', autoFocus:true, disabled:loading
+        onChange: (e) => setInput(e.target.value),
+        onKeyDown: handleKeyDown,
+        placeholder:'Type a command...', spellCheck:false, autoComplete:'off', autoFocus:true, disabled:loading
       }),
       loading && React.createElement('span', { className:'spinner', style:{ marginLeft:'8px' } }),
       React.createElement('button', { className:'btn btn-primary send-btn', onClick:() => executeCommand(input), disabled: loading || !input.trim() },
@@ -489,4 +624,4 @@ export default function SoloChat() {
     ),
     React.createElement('style', null, `@keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0 } .blinking-cursor { display:inline-block; width:8px; height:1.2em; background:var(--accent-light); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:text-bottom; }`)
   );
-            }
+}
