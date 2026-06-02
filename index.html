@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css" />
 
-  <!-- Custom CSS (external) -->
+  <!-- Custom CSS -->
   <link rel="stylesheet" href="src/styles.css" />
 
   <!-- Import Map -->
@@ -36,98 +36,51 @@
       }
     }
   </script>
-
-  <!-- CRITICAL FIX: Inline styles to force visibility of auth screen -->
-  <style>
-    /* Ensure background and card are always visible */
-    body {
-      background: #08090d !important;
-      color: #eaeaf0;
-      font-family: 'Inter', sans-serif;
-    }
-
-    /* Animated gradient fallback */
-    body::before {
-      content: "";
-      position: fixed;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: linear-gradient(45deg, #7f5af0 0%, #ff6b6b 25%, #4ecdc4 50%, #9b7eff 75%, #ff6b6b 100%);
-      background-size: 400% 400%;
-      animation: gradientMove 20s ease infinite;
-      opacity: 0.1;
-      z-index: -1;
-      pointer-events: none;
-    }
-    @keyframes gradientMove {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-
-    /* Glass card must be opaque enough */
-    .glass {
-      background: rgba(255, 255, 255, 0.12) !important;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 24px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
-    }
-
-    /* Auth card container center */
-    .container-center {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    /* Quick fixes for auth elements */
-    .auth-header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; color: white; }
-    .auth-subtitle { color: #aaa; font-size: 0.95rem; }
-    .input-field { background: rgba(255,255,255,0.1) !important; border: 1px solid rgba(255,255,255,0.2) !important; color: white !important; }
-    .input-field::placeholder { color: #888 !important; }
-    .btn-primary { background: #7f5af0 !important; color: white !important; }
-    .btn-google { background: white !important; color: #1a1a2e !important; }
-    .btn-github { background: #24292e !important; color: white !important; }
-    .error-msg { background: rgba(239,68,68,0.15); color: #ef4444; padding: 8px; border-radius: 8px; margin-bottom: 12px; }
-    .success-msg { background: rgba(34,197,94,0.15); color: #22c55e; padding: 8px; border-radius: 8px; margin-bottom: 12px; }
-    .password-toggle { color: #aaa; }
-    .divider span { color: #aaa; }
-    .auth-switch, .auth-switch a { color: #aaa; }
-    .link-btn { color: #9b7eff; text-decoration: underline; background: none; border: none; cursor: pointer; }
-  </style>
 </head>
-<body>
+<body style="background:#08090d; color:#f0f0f5; font-family: Inter, sans-serif; margin:0; padding:20px;">
   <div id="root"></div>
 
-  <!-- Global error handler -->
+  <!-- Diagnostic error display -->
+  <div id="error-dump" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#08090d; color:white; padding:20px; overflow:auto; z-index:9999; font-family: monospace; white-space: pre-wrap;"></div>
+
   <script>
-    window.onerror = function(msg, url, line) {
-      document.getElementById('root').innerHTML = 
-        '<div style="padding:20px; color:white; background:#1a1a2e; min-height:100vh;">' +
-        '<h2>Error</h2>' +
-        '<p><b>Message:</b> ' + msg + '</p>' +
-        '<p><b>File:</b> ' + url + '</p>' +
-        '<p><b>Line:</b> ' + line + '</p>' +
-        '</div>';
+    // Catch ALL errors and display them visually
+    window.onerror = function(msg, url, line, col, err) {
+      var dump = document.getElementById('error-dump');
+      dump.style.display = 'block';
+      dump.innerHTML += '<p style="color:#ef4444; margin:0 0 8px;"><b>JS Error:</b> ' + msg + '</p>';
+      dump.innerHTML += '<p style="color:#8888a0; margin:0 0 8px;">File: ' + url + ' (line ' + line + ')</p>';
+      if (err && err.stack) {
+        dump.innerHTML += '<pre style="color:#a0a0b8; font-size:0.8rem;">' + err.stack + '</pre>';
+      }
+      return true;
     };
-  </script>
 
-  <!-- Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-      });
-    }
-  </script>
+    // Also catch unhandled promise rejections
+    window.onunhandledrejection = function(event) {
+      var dump = document.getElementById('error-dump');
+      dump.style.display = 'block';
+      dump.innerHTML += '<p style="color:#ef4444; margin:0 0 8px;"><b>Unhandled Rejection:</b> ' + event.reason + '</p>';
+    };
 
-  <!-- Main app -->
-  <script type="module" src="src/main.js"></script>
+    // Try to load main module and catch any early errors
+    window.addEventListener('load', function() {
+      try {
+        var script = document.createElement('script');
+        script.type = 'module';
+        script.src = 'src/main.js';
+        script.onerror = function() {
+          var dump = document.getElementById('error-dump');
+          dump.style.display = 'block';
+          dump.innerHTML += '<p style="color:#ef4444;">Failed to load src/main.js – file missing or network error.</p>';
+        };
+        document.body.appendChild(script);
+      } catch(e) {
+        var dump = document.getElementById('error-dump');
+        dump.style.display = 'block';
+        dump.innerHTML += '<p style="color:#ef4444;">Exception loading main.js: ' + e.message + '</p>';
+      }
+    });
+  </script>
 </body>
 </html>
