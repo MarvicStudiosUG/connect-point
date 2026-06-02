@@ -148,9 +148,7 @@ export default function DuoChat() {
     const a = document.createElement('a'); a.href = url; a.download = `chat-export-${new Date().toISOString().slice(0,10)}.txt`; a.click(); URL.revokeObjectURL(url);
   };
 
-  // FriendCard, RequestCard, MessageBubble components similar to before but with improved styling from CSS.
-  // I'll include them fully to avoid omissions.
-
+  // FriendCard
   const FriendCard = ({ friendId }) => {
     const [friendProfile, setFriendProfile] = useState(null);
     useEffect(() => { getUserProfile(friendId).then(setFriendProfile); }, [friendId]);
@@ -172,6 +170,7 @@ export default function DuoChat() {
     );
   };
 
+  // RequestCard
   const RequestCard = ({ req }) => {
     const [sender, setSender] = useState(null);
     useEffect(() => { getUserProfile(req.from).then(setSender); }, [req.from]);
@@ -192,6 +191,7 @@ export default function DuoChat() {
     );
   };
 
+  // MessageBubble
   const MessageBubble = ({ msg }) => {
     const isOwn = msg.senderId === currentUser.uid;
     const reactions = msg.reactions || {};
@@ -243,9 +243,7 @@ export default function DuoChat() {
     );
   };
 
-  // Views (Main, Search, Requests, Chat) – all rendered with React.createElement, following the same polished structure.
-  // I'll include them fully to prevent truncation.
-
+  // Views
   const renderMainView = () =>
     React.createElement('div', { className:'duo-container', style:{ padding:'16px' } },
       React.createElement('div', { className:'glass', style:{ padding:'1.5rem', borderRadius:'20px' } },
@@ -321,7 +319,6 @@ export default function DuoChat() {
     const isOnline = friendPresence?.online;
     const typingFromFriend = typingUsers.includes(foundUser.uid);
 
-    // Group messages by date
     const groupedMessages = [];
     let currentDate = null;
     messages.forEach(msg => {
@@ -378,4 +375,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-                                       }
+                                                                            }
