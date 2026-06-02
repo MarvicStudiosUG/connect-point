@@ -324,3 +324,20 @@ export async function deleteVaultNote(uid, noteId) {
   const noteRef = doc(db, 'users', uid, 'vault', noteId);
   await deleteDoc(noteRef);
 }
+
+// ---------- Vault Password Management ----------
+export async function setVaultPassword(uid, password) {
+  const configRef = doc(db, 'users', uid, 'vaultConfig', 'security');
+  await setDoc(configRef, { password }); // simple plain-text storage
+}
+
+export async function getVaultPassword(uid) {
+  const configRef = doc(db, 'users', uid, 'vaultConfig', 'security');
+  const snap = await getDoc(configRef);
+  return snap.exists() ? snap.data().password : null;
+}
+
+export async function verifyVaultPassword(uid, password) {
+  const stored = await getVaultPassword(uid);
+  return stored === password;
+}
