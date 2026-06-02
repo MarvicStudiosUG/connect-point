@@ -3,6 +3,50 @@ import { useUser } from './UserContext.js';
 import { useToast } from './ToastContext.js';
 import { MOVIE_API_KEY } from './config.js';
 
+// Quick command buttons
+const QUICK_COMMANDS = ['help', 'weather', 'joke', 'news', 'crypto', 'time', 'clear'];
+
+// Command descriptions (used in predictor and help)
+const COMMAND_DESCRIPTIONS = {
+  help: 'Show all commands',
+  clear: 'Clear the screen',
+  time: 'Current time',
+  date: 'Today\'s date',
+  echo: 'Print text',
+  whoami: 'Your username',
+  version: 'Terminal version',
+  system: 'System info',
+  weather: 'Weather (city)',
+  define: 'Define a word',
+  crypto: 'Crypto price',
+  joke: 'Random joke',
+  news: 'Latest headlines',
+  qr: 'Generate QR code',
+  ip: 'Your public IP',
+  lyrics: 'Song lyrics',
+  movie: 'Movie info',
+  trivia: 'Random trivia',
+  advice: 'Get advice',
+  catfact: 'Cat fact',
+  quote: 'Inspirational quote',
+  numberfact: 'Number fact',
+  calc: 'Evaluate math (e.g., calc 2+2)',
+  currency: 'Convert currency',
+  timezone: 'Time in timezone',
+  install: 'Install app',
+  alias: 'Create alias',
+  unalias: 'Remove alias',
+  aliases: 'List aliases',
+  history: 'Command history',
+  export: 'Export log',
+  cowsay: 'Cow says...',
+  fortune: 'Random fortune',
+  sudo: 'Fake root',
+  uptime: 'Fake uptime',
+  ping: 'Ping host',
+  figlet: 'ASCII art',
+};
+
 export default function SoloChat() {
   const currentUser = useUser();
   const { addToast } = useToast();
@@ -10,7 +54,7 @@ export default function SoloChat() {
 
   const [history, setHistory] = useState(() => {
     const saved = localStorage.getItem('cp-terminal-history');
-    return saved ? JSON.parse(saved) : [{ type: 'response', text: 'Welcome to CP Terminal. Type "help" to get started.' }];
+    return saved ? JSON.parse(saved) : [{ type: 'response', text: 'Welcome to CP Terminal. Type "help" or tap a quick command below.' }];
   });
   const [input, setInput] = useState('');
   const [commandHistory, setCommandHistory] = useState(() => {
@@ -28,103 +72,50 @@ export default function SoloChat() {
   const deferredPromptRef = useRef(null);
   const [installAvailable, setInstallAvailable] = useState(false);
 
-  // Persist history and aliases
+  // Persist state
   useEffect(() => { localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-200))); }, [history]);
   useEffect(() => { localStorage.setItem('cp-command-history', JSON.stringify(commandHistory.slice(-100))); }, [commandHistory]);
   useEffect(() => { localStorage.setItem('cp-aliases', JSON.stringify(aliases)); }, [aliases]);
-
-  // Auto scroll to bottom
   useEffect(() => { outputRef.current?.scrollTo(0, outputRef.current.scrollHeight); }, [history]);
-
-  // Install prompt listener
   useEffect(() => {
     const handler = (e) => { e.preventDefault(); deferredPromptRef.current = e; setInstallAvailable(true); };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // All commands (used for predictor)
-  const allCommands = useMemo(() => [
-    'help','clear','time','date','echo','whoami','version','calc',
-    'weather','define','crypto','joke','news','qr','ip','fact',
-    'randomuser','timezone','currency','lyrics','movie','install',
-    'trivia','advice','catfact','quote','numberfact',
-    'alias','unalias','aliases','history','export','cowsay',
-    'fortune','sudo','uptime','ping','figlet','system',
-    ...Object.keys(aliases)
-  ], [aliases]);
-
-  // Command descriptions (grouped)
-  const commandHelp = useMemo(() => ({
-    // General
-    help: 'Show all commands',
-    clear: 'Clear the terminal',
-    time: 'Current time',
-    date: 'Today\'s date',
-    echo: 'Print text',
-    whoami: 'Show your username',
-    version: 'Terminal version',
-    system: 'Show system info',
-    // Internet
-    weather: 'Get weather (e.g., weather London)',
-    define: 'Define a word',
-    crypto: 'Crypto price (e.g., crypto bitcoin)',
-    joke: 'Random joke',
-    news: 'Latest headlines',
-    qr: 'Generate QR code',
-    ip: 'Your public IP',
-    lyrics: 'Song lyrics (e.g., lyrics Queen Bohemian Rhapsody)',
-    movie: 'Movie info (e.g., movie Inception)',
-    // Fun
-    trivia: 'Random trivia question',
-    advice: 'Get a piece of advice',
-    catfact: 'Random cat fact',
-    quote: 'Inspirational quote',
-    numberfact: 'Interesting number fact',
-    cowsay: 'Make a cow say something',
-    fortune: 'Random fortune',
-    figlet: 'Simple ASCII art',
-    randomuser: 'Random user profile',
-    // Math / Finance
-    calc: 'Evaluate math expression (e.g., calc 2+2)',
-    currency: 'Convert currency (e.g., currency 100 USD EUR)',
-    timezone: 'Current time in a timezone (e.g., timezone Europe/London)',
-    // System / Aliases
-    install: 'Install this app as a PWA',
-    alias: 'Create command alias (e.g., alias w weather)',
-    unalias: 'Remove an alias',
-    aliases: 'List all aliases',
-    history: 'Show command history (optional: history search <term>)',
-    export: 'Export terminal log as text file',
-    sudo: 'Simulated root access (just for fun)',
-    uptime: 'Simulated uptime',
-    ping: 'Simulated ping (e.g., ping google.com)'
-  }), []);
+  const allCommands = useMemo(() => {
+    const cmds = Object.keys(COMMAND_DESCRIPTIONS);
+    return [...cmds, ...Object.keys(aliases)];
+  }, [aliases]);
 
   const focusInput = () => inputRef.current?.focus();
   useEffect(() => { focusInput(); }, []);
 
-  // Fetch with timeout
   const fetchWithTimeout = (url, timeout = 5000) =>
     Promise.race([fetch(url), new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), timeout))]);
 
   const formatResponse = (text) => `[${new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}] ${text}`;
 
-  // Update suggestions as user types
+  // Predictor logic
   useEffect(() => {
     if (!input.trim()) { setSuggestions([]); setSelectedSuggestion(-1); return; }
     const parts = input.trim().split(/\s+/);
     const partial = parts[0].toLowerCase();
     const matches = allCommands.filter(cmd => cmd.startsWith(partial));
-    setSuggestions(matches);
+    setSuggestions(matches.slice(0, 8)); // limit to 8
     setSelectedSuggestion(matches.length > 0 ? 0 : -1);
   }, [input, allCommands]);
 
-  // Execute command
+  // Copy response text
+  const copyResponse = (text) => {
+    navigator.clipboard?.writeText(text);
+    addToast('Copied to clipboard', 'success');
+  };
+
   const executeCommand = useCallback(async (rawCmd) => {
     const trimmed = rawCmd.trim();
     if (!trimmed) return;
-    const newHistory = [...history, { type: 'command', text: `> ${trimmed}` }];
+    const newHistory = [...history, { type: 'command', text: trimmed }];
     setCommandHistory(prev => [...prev, trimmed]);
     setHistoryIndex(-1);
     setSuggestions([]);
@@ -331,7 +322,6 @@ export default function SoloChat() {
     let response = ''; let isError = false;
     switch (main) {
       case 'help': {
-        // Grouped help
         const groups = {
           'General': ['help','clear','time','date','echo','whoami','version','system'],
           'Internet': ['weather','define','crypto','joke','news','qr','ip','lyrics','movie'],
@@ -340,17 +330,17 @@ export default function SoloChat() {
           'Aliases': ['alias','unalias','aliases'],
           'System': ['install','history','export','sudo','uptime','ping']
         };
-        let helpText = '=== COMMAND HELP ===\n\n';
+        let helpText = '\n  ╔════════════════════════════════╗\n';
         for (const [group, cmds] of Object.entries(groups)) {
-          helpText += `--- ${group} ---\n`;
+          helpText += `  ║  ${group.toUpperCase().padEnd(26)} ║\n`;
           cmds.forEach(cmd => {
-            if (commandHelp[cmd]) {
-              helpText += `  ${cmd.padEnd(14)} ${commandHelp[cmd]}\n`;
-            }
+            const desc = COMMAND_DESCRIPTIONS[cmd] || '';
+            helpText += `  ║  ${cmd.padEnd(14)} ${desc.padEnd(12)} ║\n`;
           });
-          helpText += '\n';
+          helpText += '  ╠════════════════════════════════╣\n';
         }
-        helpText += 'Type a command to see more. Use Tab to autocomplete.';
+        helpText += '  ║  Type any command to use it.   ║\n';
+        helpText += '  ╚════════════════════════════════╝\n';
         response = helpText;
         break;
       }
@@ -488,13 +478,12 @@ export default function SoloChat() {
     }
     setHistory([...newHistory, { type: isError ? 'error' : 'response', text: formatResponse(response) }]);
     setInput('');
-  }, [history, aliases, showClearConfirm, userName, commandHelp, installAvailable]);
+  }, [history, aliases, showClearConfirm, userName, installAvailable]);
 
   const confirmClear = (conf) => { if (conf) { setHistory([]); setInput(''); } setShowClearConfirm(false); };
 
-  // Select a suggestion
-  const selectSuggestion = (s) => {
-    setInput(s + ' ');
+  const selectSuggestion = (cmd) => {
+    setInput(cmd + ' ');
     setSuggestions([]);
     inputRef.current?.focus();
   };
@@ -505,7 +494,6 @@ export default function SoloChat() {
       if (suggestions.length === 1) {
         selectSuggestion(suggestions[0]);
       } else if (suggestions.length > 1) {
-        // Cycle through suggestions
         setSelectedSuggestion(prev => (prev + 1) % suggestions.length);
       }
     } else if (e.key === 'Enter') {
@@ -536,15 +524,23 @@ export default function SoloChat() {
     }
   };
 
-  // Render output lines
-  const outputElements = history.map((entry, idx) =>
-    React.createElement('div', {
-      key: idx,
-      className: `terminal-line ${entry.type}${entry.type === 'response' ? ' response-card' : ''}`
-    }, entry.text)
-  );
+  // Render output lines with copy button for each response
+  const outputElements = history.map((entry, idx) => {
+    const className = `terminal-line ${entry.type}${entry.type === 'response' ? ' response-card' : ''}`;
+    if (entry.type === 'response' || entry.type === 'error') {
+      return React.createElement('div', { key: idx, className, style: { position: 'relative' } },
+        React.createElement('span', null, entry.text),
+        React.createElement('button', {
+          className: 'btn-icon copy-btn',
+          onClick: () => copyResponse(entry.text),
+          title: 'Copy',
+          style: { position: 'absolute', top: '4px', right: '4px', fontSize: '0.7rem', opacity: 0.5 }
+        }, React.createElement('i', { className: 'ph ph-copy-simple' }))
+      );
+    }
+    return React.createElement('div', { key: idx, className }, entry.text);
+  });
 
-  // Clear confirmation
   const clearConfirmDialog = showClearConfirm ? React.createElement('div', { className: 'terminal-clear-confirm glass' },
     React.createElement('p', null, 'Clear the terminal? All output will be lost.'),
     React.createElement('div', { style: { display:'flex', gap:'8px', marginTop:'8px' } },
@@ -553,19 +549,31 @@ export default function SoloChat() {
     )
   ) : null;
 
-  // Suggestions dropdown
-  const suggestionList = suggestions.length > 0 ? React.createElement('div', { className: 'terminal-suggestions glass' },
-    suggestions.map((s, i) =>
+  // Predictor dropdown
+  const predictor = suggestions.length > 0 ? React.createElement('div', { className: 'terminal-predictor glass' },
+    suggestions.map((cmd, i) =>
       React.createElement('div', {
-        key: s,
-        className: `suggestion-item${i === selectedSuggestion ? ' selected' : ''}`,
-        onMouseDown: (e) => { e.preventDefault(); selectSuggestion(s); } // use onMouseDown to prevent blur
+        key: cmd,
+        className: `predictor-item${i === selectedSuggestion ? ' selected' : ''}`,
+        onMouseDown: (e) => { e.preventDefault(); selectSuggestion(cmd); }
       },
-        React.createElement('i', { className: 'ph ph-terminal-window', style: { marginRight: '8px', fontSize: '0.8rem' } }),
-        s
+        React.createElement('i', { className: 'ph ph-terminal-window', style: { marginRight: '8px', opacity: 0.6 } }),
+        React.createElement('span', { style: { flex: 1 } }, cmd),
+        React.createElement('span', { style: { fontSize: '0.7rem', opacity: 0.5, marginLeft: '8px' } }, COMMAND_DESCRIPTIONS[cmd] || '')
       )
     )
   ) : null;
+
+  // Quick command buttons
+  const quickCommandsBar = React.createElement('div', { className: 'quick-commands' },
+    QUICK_COMMANDS.map(cmd =>
+      React.createElement('button', {
+        key: cmd,
+        className: 'btn btn-small',
+        onClick: () => executeCommand(cmd),
+      }, cmd)
+    )
+  );
 
   const inputLine = React.createElement('div', { className: 'terminal-line command', style: { display:'flex' } },
     React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
@@ -579,15 +587,16 @@ export default function SoloChat() {
       React.createElement('div', { className: 'terminal-header-actions' },
         installAvailable && React.createElement('button', { className: 'btn-icon', title: 'Install App', onClick: () => executeCommand('install') },
           React.createElement('i', { className: 'ph ph-download-simple' })),
-        React.createElement('button', { className: 'btn-icon', title: 'Clear terminal', onClick: () => { if (history.length > 2) setShowClearConfirm(true); else { setHistory([]); setInput(''); } } },
+        React.createElement('button', { className: 'btn-icon', title: 'Clear', onClick: () => { if (history.length > 2) setShowClearConfirm(true); else { setHistory([]); setInput(''); } } },
           React.createElement('i', { className: 'ph ph-broom' }))
       )
     ),
+    quickCommandsBar,
     React.createElement('div', { className: 'terminal-output', ref: outputRef },
       ...outputElements,
       inputLine,
       clearConfirmDialog,
-      suggestionList
+      predictor
     ),
     React.createElement('div', { className: 'terminal-input-area' },
       React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
@@ -603,9 +612,13 @@ export default function SoloChat() {
     React.createElement('style', null, `
       @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0 } }
       .blinking-cursor { display:inline-block; width:8px; height:1.2em; background:var(--accent-light); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:text-bottom; }
-      .terminal-suggestions { position:absolute; bottom:60px; left:0; right:0; max-height:150px; overflow-y:auto; z-index:10; }
-      .suggestion-item { padding:6px 12px; cursor:pointer; display:flex; align-items:center; }
-      .suggestion-item:hover, .suggestion-item.selected { background:var(--surface-hover); }
+      .terminal-predictor { position:absolute; bottom:70px; left:0; right:0; max-height:160px; overflow-y:auto; z-index:10; padding:8px; border-radius:12px; margin:0 4px; animation: fadeIn 0.2s ease; }
+      .predictor-item { padding:6px 12px; cursor:pointer; display:flex; align-items:center; border-radius:8px; transition: background 0.2s; }
+      .predictor-item:hover, .predictor-item.selected { background:var(--surface-hover); }
+      .quick-commands { display:flex; gap:6px; padding:8px 16px; overflow-x:auto; border-bottom:1px solid var(--border); margin-bottom:4px; }
+      .quick-commands .btn { padding:6px 12px; font-size:0.75rem; border-radius:20px; white-space:nowrap; }
+      .copy-btn { transition: opacity 0.2s; }
+      .copy-btn:hover { opacity:1 !important; }
     `)
   );
-                                          }
+    }
