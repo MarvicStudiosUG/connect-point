@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
   addDoc, serverTimestamp, where, doc,
-  updateDoc, arrayUnion
+  updateDoc
 } from 'firebase/firestore';
 import {
   db,
@@ -17,11 +17,9 @@ import {
   listenUserPresence,
   unfriend,
   deleteMessage,
-  searchUsersByName,
-  markMessageAsSeen
+  searchUsersByName
 } from './db.js';
 import { useUser } from './UserContext.js';
-import { useToast } from './ToastContext.js';
 
 const REACTION_TYPES = [
   { type:'like', icon:'ph-thumbs-up', label:'Like' },
@@ -34,7 +32,6 @@ const REACTION_TYPES = [
 
 export default function DuoChat() {
   const currentUser = useUser();
-  const { addToast } = useToast();
   const [view, setView] = useState('main');
   const [searchInput, setSearchInput] = useState('');
   const [searchByNameInput, setSearchByNameInput] = useState('');
@@ -56,70 +53,30 @@ export default function DuoChat() {
   const [searchResults, setSearchResults] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Scroll to bottom on new messages
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior:'smooth' }); }, [messages]);
 
-  // Friend requests listener
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-    const unsub = listenFriendRequests(currentUser.uid, setFriendRequests);
-    return () => unsub();
-  }, [currentUser?.uid]);
+  useEffect(() => { if (!currentUser?.uid) return; const unsub = listenFriendRequests(currentUser.uid, setFriendRequests); return () => unsub(); }, [currentUser?.uid]);
 
-  // Friends list
   useEffect(() => {
     if (!currentUser?.uid) return;
     const q = query(collection(db, 'chats'), where('participants', 'array-contains', currentUser.uid));
     const unsub = onSnapshot(q, snapshot => {
       const friendList = [];
-      snapshot.forEach(d => {
-        const data = d.data();
-        const friendId = data.participants.find(id => id !== currentUser.uid);
-        if (friendId) friendList.push({ chatId:d.id, friendId });
-      });
+      snapshot.forEach(d => { const data = d.data(); const friendId = data.participants.find(id => id !== currentUser.uid); if (friendId) friendList.push({ chatId:d.id, friendId }); });
       setFriends(friendList);
     });
     return () => unsub();
   }, [currentUser?.uid]);
 
-  // Typing listener
-  useEffect(() => {
-    if (!chatId) return;
-    const unsub = listenChatTyping(chatId, setTypingUsers);
-    return () => unsub();
-  }, [chatId]);
-
-  // Friend presence + online notification
-  useEffect(() => {
-    if (!chatId || !foundUser) return;
-    let wasOffline = friendPresence?.online === false;
-    const unsub = listenUserPresence(foundUser.uid, (presence) => {
-      setFriendPresence(presence);
-      if (presence.online && wasOffline && foundUser) {
-        addToast(`${foundUser.displayName || foundUser.email} is now online`, 'info');
-      }
-      wasOffline = !presence.online;
-    });
-    return () => unsub();
-  }, [chatId, foundUser, addToast]);
-
-  // Messages listener + mark last as seen
+  useEffect(() => { if (!chatId) return; const unsub = listenChatTyping(chatId, setTypingUsers); return () => unsub(); }, [chatId]);
+  useEffect(() => { if (!chatId || !foundUser) return; const unsub = listenUserPresence(foundUser.uid, setFriendPresence); return () => unsub(); }, [chatId, foundUser]);
   useEffect(() => {
     if (!chatId) return;
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
-    const unsub = onSnapshot(q, snapshot => {
-      const msgs = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
-      setMessages(msgs);
-      // Mark last message as seen if it's from the other user
-      const lastMsg = msgs[msgs.length - 1];
-      if (lastMsg && lastMsg.senderId !== currentUser?.uid && !lastMsg.seen) {
-        markMessageAsSeen(chatId, lastMsg.id, currentUser.uid);
-      }
-    });
+    const unsub = onSnapshot(q, snapshot => { const msgs = snapshot.docs.map(d => ({ id:d.id, ...d.data() })); setMessages(msgs); });
     return () => unsub();
-  }, [chatId, currentUser?.uid]);
+  }, [chatId]);
 
-  // Search in chat
   useEffect(() => {
     if (!searchInChat.trim()) { setSearchResults([]); return; }
     const q = searchInChat.toLowerCase();
@@ -146,23 +103,15 @@ export default function DuoChat() {
     results.length > 0 ? (setFoundUser(results[0]), setSearchError('')) : setSearchError('No users found');
   };
 
-  const handleSendRequest = async () => {
-    try { await sendFriendRequest(currentUser.uid, foundUser.cpCode); addToast('Friend request sent!', 'success'); setView('main'); }
-    catch(err) { addToast(err.message, 'error'); }
-  };
-
+  const handleSendRequest = async () => { try { await sendFriendRequest(currentUser.uid, foundUser.cpCode); alert('Friend request sent!'); setView('main'); } catch(err) { alert(err.message); } };
   const handleAcceptRequest = async (requestId) => {
     try {
       const { chatId:newChatId, friendId } = await acceptFriendRequest(requestId, currentUser.uid);
       const friendProfile = await getUserProfile(friendId);
       setChatId(newChatId); setFoundUser(friendProfile); setView('chat');
-    } catch(err) { addToast(err.message, 'error'); }
+    } catch(err) { alert(err.message); }
   };
-
-  const handleDeclineRequest = async (requestId) => {
-    await declineFriendRequest(requestId, currentUser.uid);
-  };
-
+  const handleDeclineRequest = async (requestId) => { await declineFriendRequest(requestId, currentUser.uid); };
   const openChat = async (friendId) => {
     const ids = [currentUser.uid, friendId].sort();
     const chatId = `${ids[0]}_${ids[1]}`;
@@ -176,19 +125,9 @@ export default function DuoChat() {
     const text = newMessage.trim();
     if (!text && !forwardMessage) return;
     if (!chatId) return;
-    const msgData = {
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || currentUser.email,
-      text: text || '',
-      timestamp: serverTimestamp(),
-      reactions: {},
-      seen: false
-    };
+    const msgData = { senderId:currentUser.uid, senderName:currentUser.displayName||currentUser.email, text:text||'', timestamp:serverTimestamp(), reactions:{} };
     if (replyTo) msgData.replyTo = { id:replyTo.id, text:replyTo.text, senderName:replyTo.senderName };
-    if (forwardMessage) {
-      msgData.forwardedFrom = { id:forwardMessage.id, text:forwardMessage.text, senderName:forwardMessage.senderName };
-      msgData.text = text || forwardMessage.text;
-    }
+    if (forwardMessage) { msgData.forwardedFrom = { id:forwardMessage.id, text:forwardMessage.text, senderName:forwardMessage.senderName }; msgData.text = text || forwardMessage.text; }
     if (editMessage) {
       await updateDoc(doc(db, 'chats', chatId, 'messages', editMessage.id), { text:text, edited:true, editedAt:serverTimestamp() });
       setEditMessage(null); setNewMessage(''); return;
@@ -198,14 +137,7 @@ export default function DuoChat() {
   };
 
   const handleTyping = useCallback((isTyping) => { if (chatId) setChatTyping(chatId, currentUser.uid, isTyping); }, [chatId, currentUser?.uid]);
-
-  const handleDeleteMessage = async (msgId) => {
-    if (confirm('Delete this message?')) {
-      await deleteMessage(`chats/${chatId}/messages/${msgId}`, currentUser.uid);
-      addToast('Message deleted', 'success');
-    }
-  };
-
+  const handleDeleteMessage = async (msgId) => { if (confirm('Delete this message?')) { await deleteMessage(`chats/${chatId}/messages/${msgId}`, currentUser.uid); } };
   const handleAddReaction = async (msgId, reactionType) => {
     if (!chatId) return;
     const msgRef = doc(db, 'chats', chatId, 'messages', msgId);
@@ -213,27 +145,19 @@ export default function DuoChat() {
     if (!msg) return;
     const reactions = msg.reactions || {};
     const users = reactions[reactionType] || [];
-    users.includes(currentUser.uid)
-      ? (reactions[reactionType] = users.filter(uid => uid !== currentUser.uid), reactions[reactionType].length === 0 && delete reactions[reactionType])
-      : (reactions[reactionType] = [...users, currentUser.uid]);
+    users.includes(currentUser.uid) ? (reactions[reactionType] = users.filter(uid => uid !== currentUser.uid), reactions[reactionType].length === 0 && delete reactions[reactionType]) : (reactions[reactionType] = [...users, currentUser.uid]);
     await updateDoc(msgRef, { reactions });
   };
-
   const handleEditMessage = (msg) => { if (msg.senderId !== currentUser.uid) return; setEditMessage(msg); setNewMessage(msg.text); setReplyTo(null); setForwardMessage(null); };
   const handleForwardMessage = (msg) => { setForwardMessage(msg); setNewMessage(''); setReplyTo(null); setEditMessage(null); };
-  const handleUnfriend = async (friendId) => { if (confirm('Remove this friend?')) { await unfriend(currentUser.uid, friendId); setChatId(null); setFoundUser(null); setView('main'); addToast('Friend removed', 'info'); } };
-
+  const handleUnfriend = async (friendId) => { if (confirm('Remove this friend?')) { await unfriend(currentUser.uid, friendId); setChatId(null); setFoundUser(null); setView('main'); } };
   const handleExportChat = () => {
     const text = messages.map(m => `[${m.timestamp?.toDate?.()?.toLocaleTimeString()||'??'}] ${m.senderName}: ${m.text}`).join('\n');
-    const blob = new Blob([text], { type:'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `chat-export-${new Date().toISOString().slice(0,10)}.txt`;
-    a.click(); URL.revokeObjectURL(url);
-    addToast('Chat exported', 'success');
+    const blob = new Blob([text], { type:'text/plain' }); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `chat-export-${new Date().toISOString().slice(0,10)}.txt`; a.click(); URL.revokeObjectURL(url);
   };
 
-  // ---------- Friend Card ----------
+  // FriendCard, RequestCard, MessageBubble components (same as before, but included fully below)
   const FriendCard = ({ friendId }) => {
     const [friendProfile, setFriendProfile] = useState(null);
     useEffect(() => { getUserProfile(friendId).then(setFriendProfile); }, [friendId]);
@@ -255,7 +179,6 @@ export default function DuoChat() {
     );
   };
 
-  // ---------- Request Card ----------
   const RequestCard = ({ req }) => {
     const [sender, setSender] = useState(null);
     useEffect(() => { getUserProfile(req.from).then(setSender); }, [req.from]);
@@ -276,7 +199,6 @@ export default function DuoChat() {
     );
   };
 
-  // ---------- Message Bubble ----------
   const MessageBubble = ({ msg }) => {
     const isOwn = msg.senderId === currentUser.uid;
     const reactions = msg.reactions || {};
@@ -285,7 +207,6 @@ export default function DuoChat() {
     const hasReply = msg.replyTo;
     const isForwarded = msg.forwardedFrom;
     const timeStr = msg.timestamp?.toDate?.()?.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) || '';
-    const seenIcon = isOwn && msg.seen ? React.createElement('i', { className:'ph ph-check-circle', style:{ color:'var(--success)', fontSize:'0.7rem', marginLeft:'4px' } }) : null;
 
     const reactionPills = hasReactions ? React.createElement('div', { className:'reactions-bar', style:{ marginTop:'4px' } },
       Object.entries(reactions).map(([type, users]) => {
@@ -323,13 +244,13 @@ export default function DuoChat() {
       isEdited && React.createElement('span', { style:{ fontSize:'0.6rem', opacity:0.6 } }, ' (edited)'),
       quickReactions, reactionPills,
       React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'2px' } },
-        React.createElement('div', { className:'bubble-time' }, timeStr, seenIcon),
+        React.createElement('div', { className:'bubble-time' }, timeStr),
         messageActions
       )
     );
   };
 
-  // ---------- Views ----------
+  // Views
   const renderMainView = () =>
     React.createElement('div', { className:'duo-container', style:{ padding:'16px' } },
       React.createElement('div', { className:'glass', style:{ padding:'1.5rem', borderRadius:'20px' } },
@@ -342,8 +263,8 @@ export default function DuoChat() {
         ),
         React.createElement('h3', { style:{ marginBottom:'12px', fontSize:'1rem', color:'var(--text-secondary)' } }, 'Your Friends'),
         friends.length === 0
-          ? React.createElement('div', { className:'empty-state' },
-              React.createElement('i', { className:'ph ph-users' }),
+          ? React.createElement('div', { style:{ textAlign:'center', padding:'2rem 0', color:'var(--text-secondary)' } },
+              React.createElement('i', { className:'ph ph-users', style:{ fontSize:'3rem', opacity:0.3 } }),
               React.createElement('p', null, 'No friends yet. Search by CP code or name to add.')
             )
           : React.createElement('div', { className:'rooms-grid' },
@@ -393,10 +314,7 @@ export default function DuoChat() {
         React.createElement('button', { className:'btn-icon', onClick:() => setView('main') }, React.createElement('i', { className:'ph ph-arrow-left' })),
         React.createElement('h2', { style:{ marginBottom:'1rem' } }, 'Friend Requests'),
         friendRequests.length === 0
-          ? React.createElement('div', { className:'empty-state' },
-              React.createElement('i', { className:'ph ph-envelope' }),
-              React.createElement('p', null, 'No pending requests')
-            )
+          ? React.createElement('p', { className:'text-secondary', style:{ textAlign:'center', padding:'2rem 0' } }, 'No pending requests')
           : React.createElement('div', { className:'rooms-grid' },
               friendRequests.map(req => React.createElement(RequestCard, { key:req.id, req }))
             )
@@ -413,54 +331,18 @@ export default function DuoChat() {
     let currentDate = null;
     messages.forEach(msg => {
       const date = msg.timestamp?.toDate?.()?.toLocaleDateString() || '';
-      if (date !== currentDate) {
-        currentDate = date;
-        if (date) groupedMessages.push({ type:'date', date, key:`date-${date}` });
-      }
+      if (date !== currentDate) { currentDate = date; if (date) groupedMessages.push({ type:'date', date, key:`date-${date}` }); }
       groupedMessages.push({ type:'message', msg, key:msg.id });
     });
 
-    const filteredGrouped = searchInChat.trim()
-      ? groupedMessages.filter(item => item.type === 'message' && (item.msg.text?.toLowerCase().includes(searchInChat.toLowerCase()) || item.msg.senderName?.toLowerCase().includes(searchInChat.toLowerCase())))
-      : groupedMessages;
+    const filteredGrouped = searchInChat.trim() ? groupedMessages.filter(item => item.type==='message' && (item.msg.text?.toLowerCase().includes(searchInChat.toLowerCase()) || item.msg.senderName?.toLowerCase().includes(searchInChat.toLowerCase()))) : groupedMessages;
+    const messageElements = filteredGrouped.map(item => item.type==='date' ? React.createElement('div', { key:item.key, style:{ textAlign:'center', padding:'8px 0', color:'var(--text-secondary)', fontSize:'0.75rem' } }, React.createElement('span', { style:{ background:'var(--surface)', padding:'4px 12px', borderRadius:'12px' } }, item.date)) : React.createElement(MessageBubble, { key:item.key, msg:item.msg }));
 
-    const messageElements = filteredGrouped.map(item => {
-      if (item.type === 'date') {
-        return React.createElement('div', { key:item.key, style:{ textAlign:'center', padding:'8px 0', color:'var(--text-secondary)', fontSize:'0.75rem' } },
-          React.createElement('span', { style:{ background:'var(--surface)', padding:'4px 12px', borderRadius:'12px' } }, item.date)
-        );
-      }
-      return React.createElement(MessageBubble, { key:item.key, msg:item.msg });
-    });
+    const typingIndicator = typingFromFriend ? React.createElement('div', { style:{ fontStyle:'italic', padding:'4px 16px', color:'var(--text-secondary)', fontSize:'0.85rem' } }, foundUser.displayName || foundUser.email, ' is typing...') : null;
 
-    const typingIndicator = typingFromFriend
-      ? React.createElement('div', { style:{ fontStyle:'italic', padding:'4px 16px', color:'var(--text-secondary)', fontSize:'0.85rem' } },
-          (foundUser.displayName || foundUser.email) + ' is typing...')
-      : null;
-
-    const replyBar = replyTo ? React.createElement('div', { className:'reply-bar', style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'var(--surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', borderRadius:'12px 12px 0 0', marginTop:'8px' } },
-      React.createElement('div', { style:{ flex:1, overflow:'hidden' } },
-        React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Replying to ' + replyTo.senderName),
-        React.createElement('div', { style:{ fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, replyTo.text)
-      ),
-      React.createElement('button', { className:'btn-icon', onClick:() => setReplyTo(null) }, React.createElement('i', { className:'ph ph-x' }))
-    ) : null;
-
-    const editBar = editMessage ? React.createElement('div', { className:'reply-bar', style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'var(--surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', borderRadius:'12px 12px 0 0', marginTop:'8px' } },
-      React.createElement('div', { style:{ flex:1, overflow:'hidden' } },
-        React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--accent)' } }, 'Editing message'),
-        React.createElement('div', { style:{ fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, editMessage.text)
-      ),
-      React.createElement('button', { className:'btn-icon', onClick:() => { setEditMessage(null); setNewMessage(''); } }, React.createElement('i', { className:'ph ph-x' }))
-    ) : null;
-
-    const forwardBar = forwardMessage ? React.createElement('div', { className:'reply-bar', style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'var(--surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', borderRadius:'12px 12px 0 0', marginTop:'8px' } },
-      React.createElement('div', { style:{ flex:1, overflow:'hidden' } },
-        React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Forwarding from ' + forwardMessage.senderName),
-        React.createElement('div', { style:{ fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, forwardMessage.text)
-      ),
-      React.createElement('button', { className:'btn-icon', onClick:() => setForwardMessage(null) }, React.createElement('i', { className:'ph ph-x' }))
-    ) : null;
+    const replyBar = replyTo ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Replying to ' + replyTo.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, replyTo.text)), React.createElement('button', { className:'btn-icon', onClick:() => setReplyTo(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
+    const editBar = editMessage ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--accent)' } }, 'Editing message'), React.createElement('div', { style:{ fontSize:'0.85rem' } }, editMessage.text)), React.createElement('button', { className:'btn-icon', onClick:() => { setEditMessage(null); setNewMessage(''); } }, React.createElement('i', { className:'ph ph-x' }))) : null;
+    const forwardBar = forwardMessage ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Forwarding from ' + forwardMessage.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, forwardMessage.text)), React.createElement('button', { className:'btn-icon', onClick:() => setForwardMessage(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
 
     return React.createElement('div', { className:'duo-container chat-active', style:{ height:'calc(100vh - 160px)', display:'flex', flexDirection:'column', borderRadius:'20px', overflow:'hidden' } },
       React.createElement('div', { className:'chat-header' },
@@ -471,9 +353,7 @@ export default function DuoChat() {
             React.createElement('strong', null, foundUser.displayName || foundUser.email),
             isOnline ? React.createElement('span', { className:'online-dot' }) : React.createElement('span', { style:{ display:'inline-block', width:'8px', height:'8px', borderRadius:'50%', background:'var(--text-secondary)' } })
           ),
-          React.createElement('div', { style:{ fontSize:'0.75rem', color:'var(--text-secondary)' } },
-            isOnline ? 'Online' : (friendPresence?.lastSeen?.toDate ? 'Last seen ' + new Date(friendPresence.lastSeen.toDate()).toLocaleTimeString() : 'Offline'),
-            typingFromFriend && ' - Typing...')
+          React.createElement('div', { style:{ fontSize:'0.75rem', color:'var(--text-secondary)' } }, isOnline ? 'Online' : (friendPresence?.lastSeen?.toDate ? 'Last seen ' + new Date(friendPresence.lastSeen.toDate()).toLocaleTimeString() : 'Offline'), typingFromFriend && ' - Typing...')
         ),
         React.createElement('button', { className:'btn-icon', title:'Search in chat', onClick:() => setShowSearchBar(!showSearchBar) }, React.createElement('i', { className:'ph ph-magnifying-glass' })),
         React.createElement('button', { className:'btn-icon', title:'Export chat', onClick:handleExportChat }, React.createElement('i', { className:'ph ph-download-simple' })),
@@ -484,12 +364,7 @@ export default function DuoChat() {
         React.createElement('span', { style:{ fontSize:'0.75rem', color:'var(--text-secondary)' } }, searchResults.length > 0 ? `${searchResults.length} results` : '')
       ),
       React.createElement('div', { className:'chat-messages' },
-        messageElements.length === 0
-          ? React.createElement('div', { className:'empty-state' },
-              React.createElement('i', { className:'ph ph-chat-circle-dots' }),
-              React.createElement('p', null, 'No messages yet. Say hello!')
-            )
-          : messageElements,
+        messageElements.length === 0 ? React.createElement('div', { style:{ textAlign:'center', padding:'2rem 0', color:'var(--text-secondary)' } }, React.createElement('i', { className:'ph ph-chat-circle-dots', style:{ fontSize:'3rem', opacity:0.3 } }), React.createElement('p', null, 'No messages yet.')) : messageElements,
         typingIndicator,
         React.createElement('div', { ref: messagesEndRef })
       ),
@@ -508,4 +383,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-        }
+                                                           }
