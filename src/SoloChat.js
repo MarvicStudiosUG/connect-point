@@ -117,7 +117,7 @@ export default function SoloChat() {
       uptime: 'Simulated uptime',
       ping: 'Simulated ping (ping google.com)',
       figlet: 'ASCII art (figlet Hello)',
-      vault: 'Manage vault (vault list <password>, vault add <password> "title" "content", vault edit <password> <id> "new content", vault delete <password> <id>, vault setpass <oldPassword> <newPassword>)',
+      vault: 'Manage vault (vault list <password>, vault view <password> <id>, vault add <password> "title" "content", vault edit <password> <id> "new content", vault delete <password> <id>, vault setpass <oldPassword> <newPassword>)',
     }),
     []
   );
@@ -435,6 +435,22 @@ export default function SoloChat() {
                     .join('\n');
               break;
             }
+            case 'view': {
+              // *** NEW COMMAND ***
+              if (rest.length < 1) {
+                result = 'Usage: vault view <password> <noteId>';
+                break;
+              }
+              const noteId = rest[0];
+              const notes = await getVaultNotes(currentUser.uid);
+              const note = notes.find((n) => n.id === noteId);
+              if (!note) {
+                result = 'Note not found.';
+              } else {
+                result = `Title: ${note.title}\n\nContent:\n${note.content}`;
+              }
+              break;
+            }
             case 'add': {
               const argsStr = rest.join(' ');
               const match = argsStr.match(/^"(.+?)"\s*"([\s\S]*?)"$/);
@@ -467,7 +483,7 @@ export default function SoloChat() {
               break;
             }
             default:
-              result = `Unknown vault action: ${action}. Try: list, add, edit, delete, setpass.`;
+              result = `Unknown vault action: ${action}. Try: list, view, add, edit, delete, setpass.`;
           }
           setHistory([
             ...newHistory,
@@ -705,7 +721,7 @@ export default function SoloChat() {
     setShowClearConfirm(false);
   };
 
-  // ---- PREDICTOR (UPDATED) ----
+  // ---- PREDICTOR ----
   const updateSuggestions = useCallback(
     (value) => {
       const firstWord = value.trim().split(/\s+/)[0]?.toLowerCase() || '';
@@ -720,7 +736,7 @@ export default function SoloChat() {
         setSelectedSuggestion(-1);
       } else {
         setSuggestions(matches);
-        setSelectedSuggestion(0); // highlight first
+        setSelectedSuggestion(0);
       }
     },
     [allCommands]
@@ -748,7 +764,6 @@ export default function SoloChat() {
           prev <= 0 ? suggestions.length - 1 : prev - 1
         );
       } else {
-        // Navigate command history
         const newIndex =
           historyIndex === -1
             ? commandHistory.length - 1
@@ -773,8 +788,6 @@ export default function SoloChat() {
         }
       }
     } else if (e.key === 'Enter') {
-      // If suggestions are open and the user presses Enter, DO NOT execute – let them pick with Tab
-      // Instead, just execute the current input, ignoring suggestions
       executeCommand(input);
     }
   };
@@ -923,4 +936,4 @@ export default function SoloChat() {
       .blinking-cursor { display:inline-block; width:8px; height:1.2em; background:var(--accent-light); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:text-bottom; }
     `)
   );
-    }
+          }
