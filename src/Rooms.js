@@ -155,11 +155,7 @@ export default function Rooms() {
     return () => unsub();
   }, [selectedRoom]);
 
-  useEffect(() => {
-    if (!selectedRoom) return;
-    const unsub = listenRoomTyping(selectedRoom.id, setTypingUsers);
-    return () => unsub();
-  }, [selectedRoom]);
+  useEffect(() => { if (!selectedRoom) return; const unsub = listenRoomTyping(selectedRoom.id, setTypingUsers); return () => unsub(); }, [selectedRoom]);
 
   useEffect(() => {
     if (!selectedRoom) return;
@@ -178,10 +174,7 @@ export default function Rooms() {
     const msgData = { senderId:currentUser.uid, senderName:currentUser.displayName||currentUser.email, text:text||'', timestamp:serverTimestamp(), reactions:{} };
     if (replyTo) msgData.replyTo = { id:replyTo.id, text:replyTo.text, senderName:replyTo.senderName };
     if (forwardMessage) { msgData.forwardedFrom = { id:forwardMessage.id, text:forwardMessage.text, senderName:forwardMessage.senderName }; msgData.text = text || forwardMessage.text; }
-    if (editMessage) {
-      await updateDoc(doc(db, 'rooms', selectedRoom.id, 'messages', editMessage.id), { text:text, edited:true, editedAt:serverTimestamp() });
-      setEditMessage(null); setNewMessage(''); return;
-    }
+    if (editMessage) { await updateDoc(doc(db, 'rooms', selectedRoom.id, 'messages', editMessage.id), { text:text, edited:true, editedAt:serverTimestamp() }); setEditMessage(null); setNewMessage(''); return; }
     await addDoc(collection(db, 'rooms', selectedRoom.id, 'messages'), msgData);
     setNewMessage(''); setReplyTo(null); setForwardMessage(null); handleTyping(false);
   };
@@ -223,22 +216,29 @@ export default function Rooms() {
 
   const enterRoom = room => { setSelectedRoom(room); setShowAdmin(false); setShowMemberList(false); setView('chat'); setReplyTo(null); setEditMessage(null); setForwardMessage(null); setNewMessage(''); };
 
-  // RoomCard
+  // RoomCard component
   const RoomCard = ({ room, isMember }) => {
     const memberCount = room.members?.length || 0;
-    return React.createElement('div', { className:'room-card glass', style:{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px' } },
-      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px', flex:1, cursor:'pointer' }, onClick: () => isMember ? enterRoom(room) : showToast('Join this room first', 'info') },
+    return React.createElement('div', { className:'room-card glass', style:{ padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center' } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px', flex:1, cursor:'pointer' }, onClick:() => isMember ? enterRoom(room) : showToast('Join this room first', 'info') },
         React.createElement('div', { style:{ width:'44px', height:'44px', borderRadius:'12px', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold', fontSize:'1.2rem', color:'white' } }, room.name.charAt(0).toUpperCase()),
         React.createElement('div', null,
           React.createElement('div', { style:{ fontWeight:'600' } }, room.name),
-          React.createElement('div', { style:{ fontSize:'0.8rem', color:'var(--text-secondary)' } }, `${memberCount} member${memberCount>1?'s':''}${room.adminUID===currentUser.uid?' · Admin':''}`, !room.isPublic && React.createElement('i', { className:'ph ph-lock', style:{ color:'var(--accent)', marginLeft:'8px' } }))
+          React.createElement('div', { style:{ fontSize:'0.8rem', color:'var(--text-secondary)' } },
+            memberCount + ' member' + (memberCount > 1 ? 's' : ''),
+            room.adminUID === currentUser.uid && ' • Admin',
+            !room.isPublic && React.createElement('i', { className:'ph ph-lock', style:{ color:'var(--accent)', marginLeft:'8px' } })
+          )
         )
       ),
-      React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, room.roomCode)
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, room.roomCode),
+        !isMember && React.createElement('button', { className:'btn btn-primary', style:{ padding:'8px 12px', fontSize:'0.8rem' }, onClick:(e) => { e.stopPropagation(); showToast('Use the Join tab to enter this room', 'info'); } }, 'Join')
+      )
     );
   };
 
-  // MessageBubble
+  // Message bubble
   const MessageBubble = ({ msg }) => {
     const isOwn = msg.senderId === currentUser.uid;
     const isAdmin = selectedRoom?.adminUID === msg.senderId;
@@ -253,7 +253,7 @@ export default function Rooms() {
       Object.entries(reactions).map(([type, users]) => {
         const rdef = REACTION_TYPES.find(r => r.type === type);
         const icon = rdef ? rdef.icon : 'ph-thumbs-up';
-        return React.createElement('span', { key:type, className:'reaction-item', onClick: () => handleAddReaction(msg.id, type) },
+        return React.createElement('span', { key:type, className:'reaction-item', onClick:() => handleAddReaction(msg.id, type) },
           React.createElement('i', { className: icon + ' reaction-icon' }),
           React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, users.length)
         );
@@ -279,32 +279,32 @@ export default function Rooms() {
       (isOwn || isAdmin) && React.createElement('button', { className:'btn-icon', title:'Delete', onClick:() => handleDeleteMessage(msg.id) }, React.createElement('i', { className:'ph ph-trash', style:{ color:'var(--danger)' } }))
     );
 
-    return React.createElement('div', { className:`chat-bubble ${isOwn ? 'own' : 'other'}` },
-      isAdmin && !isOwn && React.createElement('span', { style:{ fontSize:'0.6rem', color:'var(--accent)', fontWeight:'bold' } }, 'Admin'),
+    return React.createElement('div', { className:`chat-bubble ${isOwn ? 'own' : 'other'}`, style:{ maxWidth:'80%', padding:'10px 14px', borderRadius:'18px', wordWrap:'break-word', fontSize:'0.95rem', alignSelf:isOwn?'flex-end':'flex-start', background:isOwn?'var(--accent)':'var(--surface)', color:isOwn?'white':'var(--text-primary)', border:isOwn?'none':'1px solid var(--border)', borderBottomRightRadius:isOwn?'4px':'18px', borderBottomLeftRadius:isOwn?'18px':'4px', boxShadow:'0 2px 12px rgba(0,0,0,0.1)' } },
+      isAdmin && !isOwn && React.createElement('span', { style:{ fontSize:'0.6rem', color:'var(--accent)', fontWeight:'bold', display:'block' } }, 'Admin'),
       replyPreview, forwardIndicator,
       React.createElement('div', { className:'bubble-text' }, msg.text),
-      isEdited && React.createElement('span', { style:{ fontSize:'0.6rem', opacity:0.6 } }, ' (edited)'),
+      isEdited && React.createElement('span', { style:{ fontSize:'0.6rem', opacity:0.6, marginLeft:'4px' } }, '(edited)'),
       quickReactions, reactionPills,
       React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'2px' } },
-        React.createElement('div', { className:'bubble-time' }, timeStr),
+        React.createElement('div', { className:'bubble-time', style:{ fontSize:'0.6rem', opacity:0.7 } }, timeStr),
         messageActions
       )
     );
   };
 
-  // DateSeparator
+  // Date separator
   const DateSeparator = ({ date }) => {
     const today = new Date().toLocaleDateString();
     const yesterday = new Date(Date.now() - 86400000).toLocaleDateString();
     let label = date;
     if (date === today) label = 'Today';
     else if (date === yesterday) label = 'Yesterday';
-    return React.createElement('div', { style:{ textAlign:'center', padding:'8px 0', color:'var(--text-secondary)', fontSize:'0.75rem' } },
-      React.createElement('span', { style:{ background:'var(--surface)', padding:'4px 12px', borderRadius:'12px' } }, label)
+    return React.createElement('div', { style:{ textAlign:'center', padding:'8px 0', color:'var(--text-secondary)', fontSize:'0.75rem', fontWeight:'500' } },
+      React.createElement('span', { style:{ background:'var(--surface)', padding:'4px 12px', borderRadius:'12px', border:'1px solid var(--border)' } }, label)
     );
   };
 
-  // Views
+  // List view
   const renderList = () => React.createElement('div', { className:'rooms-container', style:{ padding:'16px' } },
     React.createElement('div', { className:'rooms-header', style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' } },
       React.createElement('h2', null, 'Rooms'),
@@ -328,6 +328,7 @@ export default function Rooms() {
     )
   );
 
+  // Chat view
   const renderChat = () => {
     if (!selectedRoom) return null;
     const isAdmin = selectedRoom.adminUID === currentUser.uid;
@@ -345,7 +346,6 @@ export default function Rooms() {
 
     const typingIndicator = typingUsers.length > 0 ? React.createElement('div', { style:{ fontStyle:'italic', padding:'4px 16px', color:'var(--text-secondary)', fontSize:'0.85rem' } }, 'Someone is typing...') : null;
 
-    // Admin panel
     const adminPanel = showAdmin && isAdmin ? React.createElement('div', { className:'admin-panel glass', style:{ position:'absolute', top:'60px', right:'16px', width:'280px', zIndex:50, padding:'16px', borderRadius:'16px' } },
       React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' } },
         React.createElement('h4', { style:{ margin:0 } }, 'Admin Controls'),
@@ -355,20 +355,19 @@ export default function Rooms() {
         React.createElement('label', null, 'Rename Room'),
         React.createElement('div', { style:{ display:'flex', gap:'8px' } },
           React.createElement('input', { className:'input-field', id:'newName', type:'text', defaultValue:selectedRoom.name, style:{ flex:1 } }),
-          React.createElement('button', { className:'btn btn-primary', onClick:() => handleAdminAction('updateName', document.getElementById('newName').value), style:{ padding:'8px 16px', fontSize:'0.8rem' } }, 'Save')
+          React.createElement('button', { className:'btn btn-primary', onClick:() => handleAdminAction('updateName', document.getElementById('newName').value), style:{ padding:'8px 12px', fontSize:'0.8rem' } }, 'Save')
         )
       ),
-      React.createElement('button', { className:'btn', onClick:() => handleAdminAction('togglePublic'), style:{ width:'100%', marginBottom:'8px' } }, selectedRoom.isPublic ? 'Make Private' : 'Make Public'),
-      React.createElement('div', { className:'admin-members', style:{ marginBottom:'8px' } },
-        React.createElement('strong', null, `Members (${memberCount})`),
+      React.createElement('button', { className:'btn', onClick:() => handleAdminAction('togglePublic'), style:{ width:'100%', marginBottom:'8px' } },
+        selectedRoom.isPublic ? 'Make Private' : 'Make Public'
+      ),
+      React.createElement('div', { style:{ marginBottom:'8px' } },
+        React.createElement('strong', null, 'Members (' + memberCount + ')'),
         React.createElement('div', { style:{ maxHeight:'200px', overflowY:'auto', marginTop:'4px' } },
           selectedRoom.members.map(mid => {
             const isOnline = memberPresence[mid] || false;
             return React.createElement('div', { key:mid, style:{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0', borderBottom:'1px solid var(--border)', fontSize:'0.85rem' } },
-              React.createElement('span', null,
-                mid === currentUser.uid ? 'You' : mid,
-                isOnline && React.createElement('span', { className:'online-dot', style:{ marginLeft:'8px' } })
-              ),
+              React.createElement('span', null, mid === currentUser.uid ? 'You' : mid, isOnline && React.createElement('span', { className:'online-dot', style:{ marginLeft:'8px' } })),
               mid !== currentUser.uid && React.createElement('button', { className:'btn-icon', style:{ color:'var(--danger)' }, onClick:() => handleAdminAction('removeMember', mid) }, React.createElement('i', { className:'ph ph-user-minus' }))
             );
           })
@@ -378,8 +377,7 @@ export default function Rooms() {
       React.createElement('button', { className:'btn', onClick:handleLeaveRoom, style:{ width:'100%' } }, 'Leave Room')
     ) : null;
 
-    // Member list
-    const memberList = showMemberList ? React.createElement('div', { className:'glass', style:{ position:'absolute', top:'60px', right:'16px', width:'220px', zIndex:50, padding:'12px', borderRadius:'16px' } },
+    const memberListPanel = showMemberList ? React.createElement('div', { className:'glass', style:{ position:'absolute', top:'60px', right:'16px', width:'220px', zIndex:50, padding:'12px', borderRadius:'16px' } },
       React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' } },
         React.createElement('strong', null, 'Members'),
         React.createElement('button', { className:'btn-icon', onClick:() => setShowMemberList(false) }, React.createElement('i', { className:'ph ph-x' }))
@@ -394,18 +392,25 @@ export default function Rooms() {
       })
     ) : null;
 
-    // Reply/Edit/Forward bars
-    const replyBar = replyTo ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Replying to ' + replyTo.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, replyTo.text)), React.createElement('button', { className:'btn-icon', onClick:() => setReplyTo(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
-    const editBar = editMessage ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--accent)' } }, 'Editing message'), React.createElement('div', { style:{ fontSize:'0.85rem' } }, editMessage.text)), React.createElement('button', { className:'btn-icon', onClick:() => { setEditMessage(null); setNewMessage(''); } }, React.createElement('i', { className:'ph ph-x' }))) : null;
-    const forwardBar = forwardMessage ? React.createElement('div', { className:'reply-bar' }, React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Forwarding from ' + forwardMessage.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, forwardMessage.text)), React.createElement('button', { className:'btn-icon', onClick:() => setForwardMessage(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
+    const replyBar = replyTo ? React.createElement('div', { className:'reply-bar', style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'var(--surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', borderRadius:'12px 12px 0 0', marginTop:'8px' } },
+      React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Replying to ' + replyTo.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, replyTo.text)),
+      React.createElement('button', { className:'btn-icon', onClick:() => setReplyTo(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
+
+    const editBar = editMessage ? React.createElement('div', { className:'reply-bar', style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'var(--surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', borderRadius:'12px 12px 0 0', marginTop:'8px' } },
+      React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--accent)' } }, 'Editing message'), React.createElement('div', { style:{ fontSize:'0.85rem' } }, editMessage.text)),
+      React.createElement('button', { className:'btn-icon', onClick:() => { setEditMessage(null); setNewMessage(''); } }, React.createElement('i', { className:'ph ph-x' }))) : null;
+
+    const forwardBar = forwardMessage ? React.createElement('div', { className:'reply-bar', style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:'var(--surface)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', borderRadius:'12px 12px 0 0', marginTop:'8px' } },
+      React.createElement('div', { style:{ flex:1 } }, React.createElement('div', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, 'Forwarding from ' + forwardMessage.senderName), React.createElement('div', { style:{ fontSize:'0.85rem' } }, forwardMessage.text)),
+      React.createElement('button', { className:'btn-icon', onClick:() => setForwardMessage(null) }, React.createElement('i', { className:'ph ph-x' }))) : null;
 
     return React.createElement('div', { className:'duo-container chat-active', style:{ height:'calc(100vh - 160px)', display:'flex', flexDirection:'column', borderRadius:'20px', overflow:'hidden', position:'relative' } },
-      React.createElement('div', { className:'chat-header' },
+      React.createElement('div', { className:'chat-header', style:{ display:'flex', alignItems:'center', padding:'12px 16px', background:'var(--surface)', backdropFilter:'blur(20px)', borderBottom:'1px solid var(--border)' } },
         React.createElement('button', { className:'btn-icon', onClick:() => { setView('list'); setSelectedRoom(null); } }, React.createElement('i', { className:'ph ph-arrow-left' })),
         React.createElement('div', { style:{ flex:1, marginLeft:'12px', cursor:'pointer' }, onClick:() => setShowMemberList(!showMemberList) },
           React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
             React.createElement('strong', null, selectedRoom.name),
-            React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, `(${memberCount})`),
+            React.createElement('span', { style:{ fontSize:'0.7rem', color:'var(--text-secondary)' } }, '(' + memberCount + ')'),
             !selectedRoom.isPublic && React.createElement('i', { className:'ph ph-lock', style:{ color:'var(--accent)' } })
           ),
           React.createElement('div', { style:{ fontSize:'0.75rem', color:'var(--text-secondary)' } }, selectedRoom.description || selectedRoom.roomCode)
@@ -413,8 +418,8 @@ export default function Rooms() {
         isAdmin && React.createElement('button', { className:'btn-icon', onClick:() => setShowAdmin(!showAdmin) }, React.createElement('i', { className:'ph ph-shield-check', style:{ color:'var(--accent)' } })),
         React.createElement('button', { className:'btn-icon', onClick:() => setShowMemberList(!showMemberList) }, React.createElement('i', { className:'ph ph-users' }))
       ),
-      adminPanel, memberList,
-      React.createElement('div', { className:'chat-messages' },
+      adminPanel, memberListPanel,
+      React.createElement('div', { className:'chat-messages', style:{ flex:1, overflowY:'auto', padding:'8px 8px 16px', display:'flex', flexDirection:'column', gap:'4px' } },
         messageElements.length === 0 ? React.createElement('div', { style:{ textAlign:'center', padding:'2rem 0', color:'var(--text-secondary)' } }, React.createElement('i', { className:'ph ph-chat-circle-dots', style:{ fontSize:'3rem', opacity:0.3 } }), React.createElement('p', null, 'No messages yet.')) : messageElements,
         typingIndicator,
         React.createElement('div', { ref: messagesEndRef })
@@ -422,12 +427,12 @@ export default function Rooms() {
       replyBar, editBar, forwardBar,
       React.createElement('form', { className:'chat-input-area', onSubmit:sendMessage },
         React.createElement('input', { className:'input-field', type:'text', value:newMessage, onChange:e => setNewMessage(e.target.value), placeholder: editMessage ? 'Edit message...' : forwardMessage ? 'Add a note...' : 'Type a message...', onFocus:() => handleTyping(true), onBlur:() => handleTyping(false), onKeyDown:e => e.key==='Enter' && !e.shiftKey && sendMessage(e), style:{ flex:1, marginBottom:0, padding:'12px 16px', borderRadius:'24px' } }),
-        React.createElement('button', { type:'submit', className:'btn btn-primary', disabled:!newMessage.trim() && !forwardMessage, style:{ padding:'10px 16px', borderRadius:'50%', width:'48px', height:'48px', display:'flex', alignItems:'center', justifyContent:'center' } },
-          React.createElement('i', { className:`ph ${editMessage ? 'ph-pencil-simple' : forwardMessage ? 'ph-arrow-bend-right-down' : 'ph-paper-plane-right'}`, style:{ fontSize:'1.2rem' } }))
+        React.createElement('button', { type:'submit', className:'btn btn-primary', disabled:!newMessage.trim() && !forwardMessage, style:{ padding:'10px 16px', borderRadius:'50%', width:'48px', height:'48px', display:'flex', alignItems:'center', justifyContent:'center' } }, React.createElement('i', { className:`ph ${editMessage ? 'ph-pencil-simple' : forwardMessage ? 'ph-arrow-bend-right-down' : 'ph-paper-plane-right'}`, style:{ fontSize:'1.2rem' } }))
       )
     );
   };
 
+  // Main switch
   switch (view) {
     case 'create': return React.createElement(CreateRoomView, { onBack:() => setView('list'), onCreated:() => { loadRooms(); setView('list'); showToast('Room created!', 'success'); } });
     case 'join': return React.createElement(JoinRoomView, { onBack:() => setView('list'), onJoined:() => { loadRooms(); setView('list'); showToast('Joined room!', 'success'); } });
@@ -437,4 +442,4 @@ export default function Rooms() {
       renderList()
     );
   }
-        }
+}
