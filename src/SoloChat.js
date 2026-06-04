@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useUser } from './UserContext.js';
-// Add any API keys you have to this config file
 import { MOVIE_API_KEY, WEATHER_API_KEY, MATH_API_ENABLED } from './config.js';
 import {
   getVaultNotes,
@@ -10,6 +9,7 @@ import {
   verifyVaultPassword,
   setVaultPassword,
 } from './db.js';
+import { evaluate, simplify, parse, derivative } from 'mathjs'; // Step-by-step math
 
 export default function SoloChat() {
   const currentUser = useUser();
@@ -42,7 +42,6 @@ export default function SoloChat() {
   const deferredPromptRef = useRef(null);
   const [installAvailable, setInstallAvailable] = useState(false);
 
-  // Persist history and aliases
   useEffect(() => {
     localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-200)));
   }, [history]);
@@ -58,7 +57,6 @@ export default function SoloChat() {
     }
   }, [history]);
 
-  // Install prompt listener
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
@@ -69,7 +67,6 @@ export default function SoloChat() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // Keyboard shortcuts (Ctrl+L / Ctrl+K)
   useEffect(() => {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
@@ -96,14 +93,14 @@ export default function SoloChat() {
       'randomuser', 'timezone', 'currency', 'lyrics', 'movie', 'install',
       'alias', 'unalias', 'aliases', 'quote', 'history', 'export', 'cowsay',
       'fortune', 'sudo', 'uptime', 'ping', 'figlet', 'vault',
-      // ** NEW COMMANDS **
-      'wiki', 'translate', 'cheat', 'reddit', 'shorten', 'kanye', 'roll', 'flip', 'country', 'math',
+      'wiki', 'translate', 'cheat', 'reddit', 'shorten', 'kanye', 'roll', 'flip', 'country',
+      'math', 'solve', // Added 'solve' as alias for advanced math
       ...Object.keys(aliases),
     ],
     [aliases]
   );
 
-  // Command definitions with categories for better help display
+  // Clean, categorized help
   const commandCategories = useMemo(
     () => ({
       '🛠️ General': {
@@ -121,13 +118,14 @@ export default function SoloChat() {
       '⏰ System': {
         time: 'Current time',
         date: "Today's date",
-        calc: 'Calculate expression (calc 2+3*4)',
-        math: 'Advanced math (math sin(45) + 5)',
+        calc: 'Basic calculation (calc 2+3)',
+        math: 'Advanced math with steps (math sin(45) + 5)',
+        solve: 'Alias for math',
         uptime: 'Simulated uptime',
         ping: 'Simulated ping (ping google.com)',
       },
       '🌐 Network & Data': {
-        weather: 'Weather forecast (weather London)',
+        weather: 'Weather forecast (weather Kampala)',
         define: 'Define a word (define hello)',
         crypto: 'Crypto price (crypto bitcoin)',
         news: 'Latest headlines (news or news tech)',
@@ -153,7 +151,6 @@ export default function SoloChat() {
       '📚 Knowledge': {
         wiki: 'Wikipedia summary (wiki Python)',
         cheat: 'Cheat sheet for commands (cheat git)',
-        define: 'Define a word',
         translate: 'Translate text (translate en es Hello)',
       },
       '🎬 Media': {
@@ -203,13 +200,13 @@ export default function SoloChat() {
       let main = parts[0].toLowerCase();
       let args = parts.slice(1);
 
-      // Resolve alias
       if (aliases[main]) {
         const expansion = aliases[main].split(/\s+/);
         main = expansion[0].toLowerCase();
         args = expansion.slice(1).concat(args);
       }
 
+      // Clear
       if (main === 'clear') {
         if (history.length > 2) {
           setShowClearConfirm(true);
@@ -222,7 +219,7 @@ export default function SoloChat() {
       }
       if (showClearConfirm) setShowClearConfirm(false);
 
-      // Cloud commands that need loading states
+      // Cloud commands
       const cloudCmds = [
         'weather', 'define', 'crypto', 'joke', 'news', 'qr', 'ip',
         'fact', 'randomuser', 'timezone', 'currency', 'lyrics', 'movie',
@@ -235,48 +232,73 @@ export default function SoloChat() {
         try {
           let result = '';
           switch (main) {
-            // --- IMPROVED WEATHER COMMAND ---
+            // --- WEATHER (with your API key) ---
             case 'weather': {
               if (!args[0]) {
-                result = 'Usage: weather <city> [country code] e.g., weather Kampala, Uganda';
+                result = 'Usage: weather <city> [country code] e.g., weather Kampala';
                 break;
               }
               const location = args.join(' ');
               try {
-                // Try OpenWeatherMap if API key exists
-                if (WEATHER_API_KEY) {
-                  const res = await fetchWithTimeout(
-                    `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${WEATHER_API_KEY}&units=metric`
-                  );
-                  if (res.ok) {
-                    const data = await res.json();
-                    const temp = data.main.temp;
-                    const desc = data.weather[0].description;
-                    const feelsLike = data.main.feels_like;
-                    const humidity = data.main.humidity;
-                    result = `Weather in ${data.name}, ${data.sys.country}: ${temp}°C, ${desc}. Feels like ${feelsLike}°C, ${humidity}% humidity.`;
-                  } else {
-                    throw new Error('City not found');
-                  }
-                } else {
-                  // Fallback to wttr.in
-                  const res = await fetchWithTimeout(
-                    `https://wttr.in/${encodeURIComponent(location)}?format=%C+%t+%w`
-                  );
-                  if (!res.ok) throw new Error('City not found');
-                  const text = await res.text();
-                  if (text.trim().startsWith('<')) throw new Error('Invalid response');
-                  result = `Weather in ${location}: ${text.trim()}`;
-                }
+                // Use OpenWeatherMap with your key
+                const res = await fetchWithTimeout(
+                  `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${WEATHER_API_KEY}&units=metric`
+                );
+                if (!res.ok) throw new Error('City not found');
+                const data = await res.json();
+                const temp = data.main.temp;
+                const desc = data.weather[0].description;
+                const feelsLike = data.main.feels_like;
+                const humidity = data.main.humidity;
+                result = `🌤️ Weather in ${data.name}, ${data.sys.country}: ${temp}°C, ${desc}. Feels like ${feelsLike}°C, ${humidity}% humidity.`;
               } catch (e) {
-                // If wttr.in fails, try a direct fallback with formatting
-                result = `Could not fetch weather for "${location}". Try using a more specific format like "weather Kampala, Uganda".`;
-                throw new Error(result); // To trigger the catch block for formatted response
+                result = `Could not fetch weather for "${location}". Please check the city name.`;
+                throw new Error(result);
               }
               break;
             }
 
-            // --- WIKIPEDIA SUMMARY ---
+            // --- ADVANCED MATH WITH STEP-BY-STEP ---
+            case 'math':
+            case 'solve': {
+              if (!args[0]) {
+                result = 'Usage: math <expression> e.g., math sin(45) + 5';
+                break;
+              }
+              const expr = args.join(' ');
+              try {
+                // Step 1: Parse the expression
+                const node = parse(expr);
+                // Step 2: Try to simplify
+                let simplified = 'No simplification available';
+                try {
+                  const simpResult = simplify(node);
+                  simplified = simpResult.toString();
+                } catch {
+                  // ignore
+                }
+                // Step 3: Evaluate
+                const evaluated = evaluate(expr);
+                // Step 4: Derivative (if derivative is requested, e.g., math derivative(x^2))
+                let derivativeStep = '';
+                if (expr.includes('derivative')) {
+                  const derivNode = derivative(expr.replace('derivative(', '').replace(')', ''), 'x');
+                  derivativeStep = `Derivative: ${derivNode.toString()}\n`;
+                }
+                result = `📐 Step-by-step:\n`;
+                if (simplified && simplified !== expr) {
+                  result += `  Simplify: ${simplified}\n`;
+                }
+                result += derivativeStep;
+                result += `  Evaluate: ${evaluated}\n`;
+                result += `  Expression: ${expr}`;
+              } catch (e) {
+                result = 'Error: Invalid math expression. Try: math sin(45) + 5, math derivative(x^2)';
+              }
+              break;
+            }
+
+            // --- WIKIPEDIA ---
             case 'wiki': {
               if (!args[0]) { result = 'Usage: wiki <topic>'; break; }
               const topic = args.join(' ');
@@ -330,7 +352,7 @@ export default function SoloChat() {
               break;
             }
 
-            // --- REDDIT TOP POSTS ---
+            // --- REDDIT ---
             case 'reddit': {
               if (!args[0]) { result = 'Usage: reddit <subreddit>'; break; }
               const sub = args[0];
@@ -381,7 +403,7 @@ export default function SoloChat() {
               break;
             }
 
-            // --- KANYE QUOTE ---
+            // --- KANYE ---
             case 'kanye': {
               const res = await fetchWithTimeout('https://api.kanye.rest');
               const data = await res.json();
@@ -389,13 +411,13 @@ export default function SoloChat() {
               break;
             }
 
-            // --- COIN FLIP ---
+            // --- FLIP ---
             case 'flip': {
               result = Math.random() > 0.5 ? '🪙 Heads' : '🪙 Tails';
               break;
             }
 
-            // --- DICE ROLL ---
+            // --- ROLL ---
             case 'roll': {
               let sides = 6;
               if (args[0] && !isNaN(args[0])) {
@@ -406,31 +428,7 @@ export default function SoloChat() {
               break;
             }
 
-            // --- MATH (ADVANCED) ---
-            case 'math': {
-              if (!args[0]) { result = 'Usage: math <expression> e.g., math sin(45) + 5'; break; }
-              const expression = args.join(' ');
-              try {
-                // Use mathjs if enabled in config, otherwise fallback to safer eval
-                if (MATH_API_ENABLED) {
-                  // Simulate advanced math using eval (use at your own risk)
-                  // For production, use a library like mathjs
-                  const sanitized = expression.replace(/[^0-9+\-*/().a-zA-Z\s]/g, '');
-                  const resultNum = Function('"use strict"; return (' + sanitized + ')')();
-                  result = `= ${resultNum}`;
-                } else {
-                  // Basic eval
-                  const sanitized = expression.replace(/[^0-9+\-*/().%\s]/g, '');
-                  const resultNum = Function('"use strict"; return (' + sanitized + ')')();
-                  result = `= ${resultNum}`;
-                }
-              } catch (e) {
-                result = 'Error: Invalid math expression';
-              }
-              break;
-            }
-
-            // ---- OLD CLOUD CMDS (unchanged but improved error handling) ----
+            // --- OLD CLOUD CMDS ---
             case 'define': {
               if (!args[0]) result = 'Usage: define <word>';
               else {
@@ -642,7 +640,6 @@ export default function SoloChat() {
           return;
         }
 
-        // All other vault actions require password
         if (passArgs.length === 0) {
           setHistory([
             ...newHistory,
@@ -740,7 +737,7 @@ export default function SoloChat() {
         return;
       }
 
-      // ---- LOCAL COMMANDS ----
+      // ---- LOCAL COMMANDS (unchanged) ----
       let response = '';
       let isError = false;
       switch (main) {
@@ -772,13 +769,11 @@ export default function SoloChat() {
           else response = 'Install not available. Tap browser menu and select "Add to Home screen".';
           break;
         }
-        // ... (other existing local commands: time, date, echo, whoami, version, calc, quote, history, export, cowsay, fortune, sudo, uptime, ping, figlet, alias, unalias, aliases)
-        // I will include all remaining unchanged local commands here
         case 'time': response = new Date().toLocaleTimeString(); break;
         case 'date': response = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); break;
         case 'echo': response = args.join(' '); break;
         case 'whoami': response = userName; break;
-        case 'version': response = 'CP Terminal v3.3 – Enhanced'; break;
+        case 'version': response = 'CP Terminal v3.4 – Smart Math & Weather'; break;
         case 'calc': {
           try {
             const expr = args.join('');
@@ -897,7 +892,7 @@ export default function SoloChat() {
       aliases,
       showClearConfirm,
       userName,
-      commandCategories, // Updated dependency
+      commandCategories,
       installAvailable,
       currentUser,
     ]
@@ -911,7 +906,6 @@ export default function SoloChat() {
     setShowClearConfirm(false);
   };
 
-  // ---- PREDICTOR (unchanged) ----
   const updateSuggestions = useCallback(
     (value) => {
       const firstWord = value.trim().split(/\s+/)[0]?.toLowerCase() || '';
@@ -975,8 +969,6 @@ export default function SoloChat() {
     }
   };
 
-  // ---- RENDER (using React.createElement) ----
-  // (Includes all the improved UI elements: Modal, Suggestions, History Indicator, etc.)
   const header = React.createElement(
     'div', { className: 'terminal-header' },
     React.createElement('span', { className: 'terminal-title' }, 'CP Terminal'),
@@ -1088,4 +1080,4 @@ export default function SoloChat() {
     suggestionList,
     inputArea
   );
-}
+                   }
