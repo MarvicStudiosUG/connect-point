@@ -41,7 +41,6 @@ export default function SoloChat() {
   const deferredPromptRef = useRef(null);
   const [installAvailable, setInstallAvailable] = useState(false);
 
-  // Persist history and aliases
   useEffect(() => {
     localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-200)));
   }, [history]);
@@ -57,7 +56,6 @@ export default function SoloChat() {
     }
   }, [history]);
 
-  // Install prompt listener
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
@@ -68,7 +66,6 @@ export default function SoloChat() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // Keyboard shortcuts (Ctrl+L / Ctrl+K)
   useEffect(() => {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
@@ -102,68 +99,68 @@ export default function SoloChat() {
     [aliases]
   );
 
-  // Clean, categorized help
-  const commandCategories = useMemo(
+  // Clean help with examples and no emojis
+  const commandHelp = useMemo(
     () => ({
-      '🛠️ General': {
-        help: 'Show all commands',
+      'General': {
+        help: 'Show this help message',
         clear: 'Clear the terminal',
-        echo: 'Print text (echo hello)',
+        echo: 'Print text (Example: echo hello)',
         whoami: 'Show your username',
-        version: 'Terminal version',
+        version: 'Show terminal version',
         history: 'Show command history',
         export: 'Export terminal log as file',
-        alias: 'Create alias (alias w weather)',
-        unalias: 'Remove alias (unalias w)',
+        alias: 'Create alias (Example: alias w weather)',
+        unalias: 'Remove alias (Example: unalias w)',
         aliases: 'List all aliases',
       },
-      '⏰ System': {
-        time: 'Current time',
-        date: "Today's date",
-        calc: 'Basic calculation (calc 2+3)',
-        math: 'Advanced math with steps (math sin(45) + 5)',
+      'System': {
+        time: 'Show current time',
+        date: "Show today's date",
+        calc: 'Calculate expression (Example: calc 2+3*4)',
+        math: 'Advanced math with steps (Example: math 2^10 + sqrt(25))',
         solve: 'Alias for math',
         uptime: 'Simulated uptime',
-        ping: 'Simulated ping (ping google.com)',
+        ping: 'Simulated ping (Example: ping google.com)',
       },
-      '🌐 Network & Data': {
-        weather: 'Weather forecast (weather Kampala)',
-        define: 'Define a word (define hello)',
-        crypto: 'Crypto price (crypto bitcoin)',
-        news: 'Latest headlines (news or news tech)',
-        ip: 'Your public IP',
-        timezone: 'Time in timezone (timezone Europe/London)',
-        currency: 'Convert currency (currency 100 USD EUR)',
-        qr: 'Generate QR code (qr https://example.com)',
-        shorten: 'Shorten URL (shorten https://example.com)',
-        country: 'Country info (country Uganda)',
+      'Network & Data': {
+        weather: 'Get weather forecast (Example: weather Kampala)',
+        define: 'Look up word definition (Example: define hello)',
+        crypto: 'Get crypto price (Example: crypto bitcoin)',
+        news: 'Get latest headlines (Example: news tech)',
+        ip: 'Get your public IP address',
+        timezone: 'Get current time in timezone (Example: timezone Europe/London)',
+        currency: 'Convert currency (Example: currency 100 USD EUR)',
+        qr: 'Generate QR code (Example: qr https://example.com)',
+        shorten: 'Shorten URL (Example: shorten https://example.com)',
+        country: 'Get country information (Example: country Uganda)',
       },
-      '🎮 Fun & Entertainment': {
-        joke: 'Random joke',
-        fact: 'Random fact',
-        randomuser: 'Random user profile',
-        quote: 'Inspirational quote',
-        cowsay: 'Cow says something (cowsay Hello)',
-        fortune: 'Random fortune cookie',
-        figlet: 'ASCII art (figlet Hello)',
-        kanye: 'Random Kanye West quote',
-        roll: 'Roll a dice (roll 6)',
+      'Fun': {
+        joke: 'Get a random joke',
+        fact: 'Get a random fact',
+        randomuser: 'Get a random user profile',
+        quote: 'Get an inspirational quote',
+        cowsay: 'Make a cow say something (Example: cowsay Hello)',
+        fortune: 'Get a random fortune cookie',
+        figlet: 'Create ASCII art (Example: figlet Hello)',
+        kanye: 'Get a random Kanye West quote',
+        roll: 'Roll a dice (Example: roll 6)',
         flip: 'Flip a coin',
       },
-      '📚 Knowledge': {
-        wiki: 'Wikipedia summary (wiki Python)',
-        cheat: 'Cheat sheet for commands (cheat git)',
-        translate: 'Translate text (translate en es Hello)',
+      'Knowledge': {
+        wiki: 'Get Wikipedia summary (Example: wiki Python)',
+        cheat: 'Get cheat sheet for a command (Example: cheat git)',
+        translate: 'Translate text (Example: translate en es Hello)',
       },
-      '🎬 Media': {
-        movie: 'Movie info (movie Inception)',
-        lyrics: 'Song lyrics (lyrics Queen Bohemian Rhapsody)',
-        reddit: 'Top posts from subreddit (reddit programming)',
+      'Media': {
+        movie: 'Get movie information (Example: movie Inception)',
+        lyrics: 'Get song lyrics (Example: lyrics Queen Bohemian Rhapsody)',
+        reddit: 'Get top posts from a subreddit (Example: reddit programming)',
       },
-      '🔐 Vault': {
-        vault: 'Manage vault (vault list <password>)',
+      'Vault': {
+        vault: 'Manage vault (Examples: vault list password, vault view password id)',
       },
-      '📦 PWA': {
+      'PWA': {
         install: 'Install this app as PWA',
       },
     }),
@@ -234,10 +231,9 @@ export default function SoloChat() {
         try {
           let result = '';
           switch (main) {
-            // --- WEATHER (with your API key) ---
             case 'weather': {
               if (!args[0]) {
-                result = 'Usage: weather <city> e.g., weather Kampala';
+                result = 'Usage: weather <city> (Example: weather Kampala)';
                 break;
               }
               const location = args.join(' ');
@@ -251,7 +247,7 @@ export default function SoloChat() {
                 const desc = data.weather[0].description;
                 const feelsLike = data.main.feels_like;
                 const humidity = data.main.humidity;
-                result = `🌤️ Weather in ${data.name}, ${data.sys.country}: ${temp}°C, ${desc}. Feels like ${feelsLike}°C, ${humidity}% humidity.`;
+                result = `Weather in ${data.name}, ${data.sys.country}: ${temp}°C, ${desc}. Feels like ${feelsLike}°C, ${humidity}% humidity.`;
               } catch (e) {
                 result = `Could not fetch weather for "${location}". Please check the city name.`;
                 throw new Error(result);
@@ -259,17 +255,19 @@ export default function SoloChat() {
               break;
             }
 
-            // --- MATH WITH STEP-BY-STEP (NO LIBRARY NEEDED) ---
+            // --- MATH WITH STEP-BY-STEP (supports ×, ÷, long expressions) ---
             case 'math':
             case 'solve': {
               if (!args[0]) {
-                result = 'Usage: math <expression> e.g., math 2^10 + sqrt(25)';
+                result = 'Usage: math <expression> (Example: math 2*6+6+8)';
                 break;
               }
               const expr = args.join(' ');
               try {
-                // Convert math notation to JavaScript eval
+                // Replace × and ÷ with * and /
                 let simplified = expr
+                  .replace(/×/g, '*')
+                  .replace(/÷/g, '/')
                   .replace(/sqrt/g, 'Math.sqrt')
                   .replace(/sin/g, 'Math.sin')
                   .replace(/cos/g, 'Math.cos')
@@ -281,16 +279,15 @@ export default function SoloChat() {
                 
                 const evaluated = new Function(`"use strict"; return (${simplified})`)();
                 
-                result = `📐 Step-by-step:\n  Expression: ${expr}\n  Simplify: ${simplified}\n  Evaluate: ${evaluated}`;
+                result = `Expression: ${expr}\nSimplify: ${simplified}\nResult: ${evaluated}`;
               } catch (e) {
-                result = 'Error: Invalid math expression. Try: math 2^10 + sqrt(25)';
+                result = 'Error: Invalid math expression. Try: math 2*6+6+8 or math 5/77*5';
               }
               break;
             }
 
-            // --- WIKIPEDIA ---
             case 'wiki': {
-              if (!args[0]) { result = 'Usage: wiki <topic>'; break; }
+              if (!args[0]) { result = 'Usage: wiki <topic> (Example: wiki Python)'; break; }
               const topic = args.join(' ');
               const res = await fetchWithTimeout(
                 `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`
@@ -300,17 +297,16 @@ export default function SoloChat() {
               if (data.extract) {
                 let summary = data.extract;
                 if (summary.length > 300) summary = summary.slice(0, 300) + '...';
-                result = `📖 ${data.title}\n${summary}`;
+                result = `${data.title}\n${summary}`;
               } else {
                 throw new Error('No summary available');
               }
               break;
             }
 
-            // --- TRANSLATE ---
             case 'translate': {
               if (args.length < 3) {
-                result = 'Usage: translate <from> <to> <text> e.g., translate en es Hello';
+                result = 'Usage: translate <from> <to> <text> (Example: translate en es Hello)';
                 break;
               }
               const from = args[0];
@@ -321,30 +317,28 @@ export default function SoloChat() {
               );
               const data = await res.json();
               if (data.responseData) {
-                result = `🔁 ${data.responseData.translatedText}`;
+                result = data.responseData.translatedText;
               } else {
                 throw new Error('Translation failed');
               }
               break;
             }
 
-            // --- CHEAT SHEET ---
             case 'cheat': {
-              if (!args[0]) { result = 'Usage: cheat <command> e.g., cheat git'; break; }
+              if (!args[0]) { result = 'Usage: cheat <command> (Example: cheat git)'; break; }
               const command = args[0];
               const res = await fetchWithTimeout(`https://cheat.sh/${encodeURIComponent(command)}`);
               const text = await res.text();
               if (text.length > 1000) {
-                result = `📖 ${command}\n${text.slice(0, 1000)}\n... (truncated)`;
+                result = `${command}\n${text.slice(0, 1000)}\n... (truncated)`;
               } else {
-                result = `📖 ${command}\n${text}`;
+                result = `${command}\n${text}`;
               }
               break;
             }
 
-            // --- REDDIT ---
             case 'reddit': {
-              if (!args[0]) { result = 'Usage: reddit <subreddit>'; break; }
+              if (!args[0]) { result = 'Usage: reddit <subreddit> (Example: reddit programming)'; break; }
               const sub = args[0];
               const res = await fetchWithTimeout(`https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?limit=5`);
               if (!res.ok) throw new Error('Subreddit not found');
@@ -361,66 +355,61 @@ export default function SoloChat() {
               break;
             }
 
-            // --- URL SHORTENER ---
             case 'shorten': {
-              if (!args[0]) { result = 'Usage: shorten <url>'; break; }
+              if (!args[0]) { result = 'Usage: shorten <url> (Example: shorten https://example.com)'; break; }
               const longUrl = args[0];
               const res = await fetchWithTimeout(
                 `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`
               );
               const text = await res.text();
               if (text.startsWith('http')) {
-                result = `🔗 Shortened: ${text}`;
+                result = `Shortened: ${text}`;
               } else {
                 throw new Error('Failed to shorten URL');
               }
               break;
             }
 
-            // --- COUNTRY INFO ---
             case 'country': {
-              if (!args[0]) { result = 'Usage: country <name>'; break; }
+              if (!args[0]) { result = 'Usage: country <name> (Example: country Uganda)'; break; }
               const name = args.join(' ');
               const res = await fetchWithTimeout(`https://restcountries.com/v3.1/name/${encodeURIComponent(name)}`);
               if (!res.ok) throw new Error('Country not found');
               const data = await res.json();
               if (data.length > 0) {
                 const country = data[0];
-                result = `🌍 ${country.name.common}\nCapital: ${country.capital ? country.capital[0] : 'N/A'}\nPopulation: ${country.population.toLocaleString()}\nCurrency: ${Object.values(country.currencies)[0].name}`;
+                result = `${country.name.common}\nCapital: ${country.capital ? country.capital[0] : 'N/A'}\nPopulation: ${country.population.toLocaleString()}\nCurrency: ${Object.values(country.currencies)[0].name}`;
               } else {
                 result = 'No country found.';
               }
               break;
             }
 
-            // --- KANYE ---
             case 'kanye': {
               const res = await fetchWithTimeout('https://api.kanye.rest');
               const data = await res.json();
-              result = `💬 ${data.quote} - Kanye West`;
+              result = `${data.quote} - Kanye West`;
               break;
             }
 
-            // --- FLIP ---
             case 'flip': {
-              result = Math.random() > 0.5 ? '🪙 Heads' : '🪙 Tails';
+              result = Math.random() > 0.5 ? 'Heads' : 'Tails';
               break;
             }
 
-            // --- ROLL ---
             case 'roll': {
               let sides = 6;
               if (args[0] && !isNaN(args[0])) {
                 sides = parseInt(args[0]);
               }
               const roll = Math.floor(Math.random() * sides) + 1;
-              result = `🎲 You rolled a ${roll} on a d${sides}`;
+              result = `You rolled a ${roll} on a d${sides}`;
               break;
             }
 
             // --- OLD CLOUD CMDS ---
             case 'define': {
-              if (!args[0]) result = 'Usage: define <word>';
+              if (!args[0]) result = 'Usage: define <word> (Example: define hello)';
               else {
                 const res = await fetchWithTimeout(
                   `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(args[0])}`
@@ -437,7 +426,7 @@ export default function SoloChat() {
               break;
             }
             case 'crypto': {
-              if (!args[0]) result = 'Usage: crypto <coin_id>';
+              if (!args[0]) result = 'Usage: crypto <coin_id> (Example: crypto bitcoin)';
               else {
                 const res = await fetchWithTimeout(
                   `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(args[0])}&vs_currencies=usd`
@@ -480,7 +469,7 @@ export default function SoloChat() {
               break;
             }
             case 'qr': {
-              if (!args[0]) result = 'Usage: qr <text or url>';
+              if (!args[0]) result = 'Usage: qr <text or url> (Example: qr https://example.com)';
               else
                 result = `QR Code: https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(args.join(' '))}`;
               break;
@@ -507,7 +496,7 @@ export default function SoloChat() {
               break;
             }
             case 'timezone': {
-              if (!args[0]) result = 'Usage: timezone <area>/<city>';
+              if (!args[0]) result = 'Usage: timezone <area>/<city> (Example: timezone Europe/London)';
               else {
                 const res = await fetchWithTimeout(
                   `https://worldtimeapi.org/api/timezone/${encodeURIComponent(args[0])}`
@@ -520,7 +509,7 @@ export default function SoloChat() {
             }
             case 'currency': {
               if (args.length < 3)
-                result = 'Usage: currency <amount> <from> <to> (e.g., currency 100 USD EUR)';
+                result = 'Usage: currency <amount> <from> <to> (Example: currency 100 USD EUR)';
               else {
                 const amount = args[0];
                 const from = args[1].toUpperCase();
@@ -535,7 +524,7 @@ export default function SoloChat() {
               break;
             }
             case 'lyrics': {
-              if (args.length < 2) result = 'Usage: lyrics <artist> <song>';
+              if (args.length < 2) result = 'Usage: lyrics <artist> <song> (Example: lyrics Queen Bohemian Rhapsody)';
               else {
                 const artist = args[0];
                 const song = args.slice(1).join(' ');
@@ -554,7 +543,7 @@ export default function SoloChat() {
               break;
             }
             case 'movie': {
-              if (!args[0]) result = 'Usage: movie <title>';
+              if (!args[0]) result = 'Usage: movie <title> (Example: movie Inception)';
               else {
                 const apiKey = MOVIE_API_KEY || 'trilogy';
                 const res = await fetchWithTimeout(
@@ -732,15 +721,15 @@ export default function SoloChat() {
       let isError = false;
       switch (main) {
         case 'help': {
-          let helpText = '📋 **Terminal Commands**\n\n';
-          Object.entries(commandCategories).forEach(([category, cmds]) => {
-            helpText += `**${category}**\n`;
+          let helpText = 'Available commands:\n\n';
+          Object.entries(commandHelp).forEach(([category, cmds]) => {
+            helpText += `${category}:\n`;
             Object.entries(cmds).forEach(([cmd, desc]) => {
-              helpText += `  ${cmd.padEnd(12)} ${desc}\n`;
+              helpText += `  ${cmd.padEnd(15)} ${desc}\n`;
             });
             helpText += '\n';
           });
-          helpText += '**✨ Tips**\n  Use `alias <short> <command>` to create shortcuts.\n  Use `history` to see past commands.\n  Use `export` to save the log.';
+          helpText += 'Tips:\n  Use alias <short> <command> to create shortcuts.\n  Use history to see past commands.\n  Use export to save the log.';
           response = helpText;
           break;
         }
@@ -819,7 +808,7 @@ export default function SoloChat() {
         case 'sudo': response = 'Sorry, you are not root.'; break;
         case 'uptime': response = `Uptime: ${Math.floor(Math.random() * 10000) + 100} hours (simulated)`; break;
         case 'ping': {
-          if (!args[0]) response = 'Usage: ping <host>';
+          if (!args[0]) response = 'Usage: ping <host> (Example: ping google.com)';
           else {
             const host = args[0];
             const delay = Math.floor(Math.random() * 150) + 20;
@@ -834,7 +823,7 @@ export default function SoloChat() {
           break;
         }
         case 'alias': {
-          if (args.length < 2) response = 'Usage: alias <short> <command>';
+          if (args.length < 2) response = 'Usage: alias <short> <command> (Example: alias w weather)';
           else {
             const short = args[0];
             const full = args.slice(1).join(' ');
@@ -844,7 +833,7 @@ export default function SoloChat() {
           break;
         }
         case 'unalias': {
-          if (!args[0]) response = 'Usage: unalias <short>';
+          if (!args[0]) response = 'Usage: unalias <short> (Example: unalias w)';
           else {
             const short = args[0];
             if (aliases[short]) {
@@ -882,7 +871,7 @@ export default function SoloChat() {
       aliases,
       showClearConfirm,
       userName,
-      commandCategories,
+      commandHelp,
       installAvailable,
       currentUser,
     ]
