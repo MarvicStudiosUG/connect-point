@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useUser } from './UserContext.js';
-import { MOVIE_API_KEY, WEATHER_API_KEY, MATH_API_ENABLED } from './config.js';
+import { MOVIE_API_KEY, WEATHER_API_KEY } from './config.js';
 import {
   getVaultNotes,
   createVaultNote,
@@ -9,7 +9,6 @@ import {
   verifyVaultPassword,
   setVaultPassword,
 } from './db.js';
-import { evaluate, simplify, parse, derivative } from 'mathjs'; // Step-by-step math
 
 export default function SoloChat() {
   const currentUser = useUser();
@@ -42,6 +41,7 @@ export default function SoloChat() {
   const deferredPromptRef = useRef(null);
   const [installAvailable, setInstallAvailable] = useState(false);
 
+  // Persist history and aliases
   useEffect(() => {
     localStorage.setItem('cp-terminal-history', JSON.stringify(history.slice(-200)));
   }, [history]);
@@ -57,6 +57,7 @@ export default function SoloChat() {
     }
   }, [history]);
 
+  // Install prompt listener
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
@@ -67,6 +68,7 @@ export default function SoloChat() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  // Keyboard shortcuts (Ctrl+L / Ctrl+K)
   useEffect(() => {
     const handleKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
@@ -94,7 +96,7 @@ export default function SoloChat() {
       'alias', 'unalias', 'aliases', 'quote', 'history', 'export', 'cowsay',
       'fortune', 'sudo', 'uptime', 'ping', 'figlet', 'vault',
       'wiki', 'translate', 'cheat', 'reddit', 'shorten', 'kanye', 'roll', 'flip', 'country',
-      'math', 'solve', // Added 'solve' as alias for advanced math
+      'math', 'solve',
       ...Object.keys(aliases),
     ],
     [aliases]
@@ -235,12 +237,11 @@ export default function SoloChat() {
             // --- WEATHER (with your API key) ---
             case 'weather': {
               if (!args[0]) {
-                result = 'Usage: weather <city> [country code] e.g., weather Kampala';
+                result = 'Usage: weather <city> e.g., weather Kampala';
                 break;
               }
               const location = args.join(' ');
               try {
-                // Use OpenWeatherMap with your key
                 const res = await fetchWithTimeout(
                   `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${WEATHER_API_KEY}&units=metric`
                 );
@@ -258,42 +259,31 @@ export default function SoloChat() {
               break;
             }
 
-            // --- ADVANCED MATH WITH STEP-BY-STEP ---
+            // --- MATH WITH STEP-BY-STEP (NO LIBRARY NEEDED) ---
             case 'math':
             case 'solve': {
               if (!args[0]) {
-                result = 'Usage: math <expression> e.g., math sin(45) + 5';
+                result = 'Usage: math <expression> e.g., math 2^10 + sqrt(25)';
                 break;
               }
               const expr = args.join(' ');
               try {
-                // Step 1: Parse the expression
-                const node = parse(expr);
-                // Step 2: Try to simplify
-                let simplified = 'No simplification available';
-                try {
-                  const simpResult = simplify(node);
-                  simplified = simpResult.toString();
-                } catch {
-                  // ignore
-                }
-                // Step 3: Evaluate
-                const evaluated = evaluate(expr);
-                // Step 4: Derivative (if derivative is requested, e.g., math derivative(x^2))
-                let derivativeStep = '';
-                if (expr.includes('derivative')) {
-                  const derivNode = derivative(expr.replace('derivative(', '').replace(')', ''), 'x');
-                  derivativeStep = `Derivative: ${derivNode.toString()}\n`;
-                }
-                result = `📐 Step-by-step:\n`;
-                if (simplified && simplified !== expr) {
-                  result += `  Simplify: ${simplified}\n`;
-                }
-                result += derivativeStep;
-                result += `  Evaluate: ${evaluated}\n`;
-                result += `  Expression: ${expr}`;
+                // Convert math notation to JavaScript eval
+                let simplified = expr
+                  .replace(/sqrt/g, 'Math.sqrt')
+                  .replace(/sin/g, 'Math.sin')
+                  .replace(/cos/g, 'Math.cos')
+                  .replace(/tan/g, 'Math.tan')
+                  .replace(/log/g, 'Math.log')
+                  .replace(/pi/g, 'Math.PI')
+                  .replace(/e/g, 'Math.E')
+                  .replace(/\^/g, '**');
+                
+                const evaluated = new Function(`"use strict"; return (${simplified})`)();
+                
+                result = `📐 Step-by-step:\n  Expression: ${expr}\n  Simplify: ${simplified}\n  Evaluate: ${evaluated}`;
               } catch (e) {
-                result = 'Error: Invalid math expression. Try: math sin(45) + 5, math derivative(x^2)';
+                result = 'Error: Invalid math expression. Try: math 2^10 + sqrt(25)';
               }
               break;
             }
@@ -594,7 +584,7 @@ export default function SoloChat() {
         return;
       }
 
-      // ---- VAULT COMMANDS (unchanged) ----
+      // ---- VAULT COMMANDS ----
       if (main === 'vault') {
         if (args.length === 0) {
           const entry = {
@@ -737,7 +727,7 @@ export default function SoloChat() {
         return;
       }
 
-      // ---- LOCAL COMMANDS (unchanged) ----
+      // ---- LOCAL COMMANDS ----
       let response = '';
       let isError = false;
       switch (main) {
@@ -1080,4 +1070,4 @@ export default function SoloChat() {
     suggestionList,
     inputArea
   );
-                   }
+        }
