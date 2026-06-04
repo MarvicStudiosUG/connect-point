@@ -68,6 +68,26 @@ export default function SoloChat() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  // Keyboard shortcuts (Ctrl+L / Ctrl+K)
+  useEffect(() => {
+    const handleKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        setShowClearConfirm(true);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (history.length > 2) setShowClearConfirm(true);
+        else {
+          setHistory([]);
+          setInput('');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [history]);
+
   const allCommands = useMemo(
     () => [
       'help', 'clear', 'time', 'date', 'echo', 'whoami', 'version', 'calc',
@@ -436,7 +456,6 @@ export default function SoloChat() {
               break;
             }
             case 'view': {
-              // *** NEW COMMAND ***
               if (rest.length < 1) {
                 result = 'Usage: vault view <password> <noteId>';
                 break;
@@ -792,7 +811,44 @@ export default function SoloChat() {
     }
   };
 
-  // ---- RENDER ----
+  // ---- RENDER (using React.createElement) ----
+  const header = React.createElement(
+    'div',
+    { className: 'terminal-header' },
+    React.createElement('span', { className: 'terminal-title' }, 'CP Terminal'),
+    React.createElement(
+      'div',
+      { className: 'terminal-header-actions' },
+      installAvailable &&
+        React.createElement(
+          'button',
+          {
+            className: 'btn-icon',
+            onClick: () => executeCommand('install'),
+            title: 'Install App',
+            'aria-label': 'Install App',
+          },
+          React.createElement('i', { className: 'ph ph-download-simple' })
+        ),
+      React.createElement(
+        'button',
+        {
+          className: 'btn-icon',
+          onClick: () => {
+            if (history.length > 2) setShowClearConfirm(true);
+            else {
+              setHistory([]);
+              setInput('');
+            }
+          },
+          title: 'Clear terminal (Ctrl+L)',
+          'aria-label': 'Clear terminal',
+        },
+        React.createElement('i', { className: 'ph ph-broom' })
+      )
+    )
+  );
+
   const outputElements = history.map((entry, idx) =>
     React.createElement(
       'div',
@@ -807,11 +863,11 @@ export default function SoloChat() {
   const clearConfirmDialog = showClearConfirm
     ? React.createElement(
         'div',
-        { className: 'terminal-clear-confirm glass' },
+        { className: 'terminal-clear-confirm' },
         React.createElement('p', null, 'Clear the terminal?'),
         React.createElement(
           'div',
-          { style: { display: 'flex', gap: '8px', marginTop: '8px' } },
+          { className: 'btn-group' },
           React.createElement(
             'button',
             { className: 'btn btn-primary', onClick: () => confirmClear(true) },
@@ -819,7 +875,7 @@ export default function SoloChat() {
           ),
           React.createElement(
             'button',
-            { className: 'btn', onClick: () => confirmClear(false) },
+            { className: 'btn btn-secondary', onClick: () => confirmClear(false) },
             'No'
           )
         )
@@ -830,7 +886,7 @@ export default function SoloChat() {
     suggestions.length > 0
       ? React.createElement(
           'div',
-          { className: 'terminal-suggestions glass' },
+          { className: 'terminal-suggestions', role: 'listbox' },
           suggestions.map((s, i) =>
             React.createElement(
               'div',
@@ -843,6 +899,8 @@ export default function SoloChat() {
                   setSelectedSuggestion(-1);
                   inputRef.current.focus();
                 },
+                role: 'option',
+                'aria-selected': i === selectedSuggestion,
               },
               s
             )
@@ -850,90 +908,55 @@ export default function SoloChat() {
         )
       : null;
 
+  const inputArea = React.createElement(
+    'div',
+    { className: 'terminal-input-area' },
+    React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
+    React.createElement('input', {
+      ref: inputRef,
+      type: 'text',
+      className: 'terminal-input',
+      value: input,
+      onChange: handleInputChange,
+      onKeyDown: handleKeyDown,
+      placeholder: 'Type a command...',
+      spellCheck: false,
+      autoComplete: 'off',
+      autoFocus: true,
+      disabled: loading,
+      'aria-label': 'Terminal input',
+    }),
+    loading && React.createElement('span', { className: 'spinner' }),
+    React.createElement(
+      'button',
+      {
+        className: 'btn btn-primary send-btn',
+        onClick: () => executeCommand(input),
+        disabled: loading || !input.trim(),
+        'aria-label': 'Execute command',
+      },
+      React.createElement('i', { className: 'ph ph-paper-plane-right' })
+    )
+  );
+
   return React.createElement(
     'div',
     { className: 'terminal', onClick: focusInput },
-    React.createElement(
-      'div',
-      { className: 'terminal-header' },
-      React.createElement('span', { className: 'terminal-title' }, 'CP Terminal'),
-      React.createElement(
-        'div',
-        { className: 'terminal-header-actions' },
-        installAvailable &&
-          React.createElement(
-            'button',
-            {
-              className: 'btn-icon',
-              onClick: () => executeCommand('install'),
-              title: 'Install App',
-            },
-            React.createElement('i', { className: 'ph ph-download-simple' })
-          ),
-        React.createElement(
-          'button',
-          {
-            className: 'btn-icon',
-            onClick: () => {
-              if (history.length > 2) setShowClearConfirm(true);
-              else {
-                setHistory([]);
-                setInput('');
-              }
-            },
-            title: 'Clear terminal',
-          },
-          React.createElement('i', { className: 'ph ph-broom' })
-        )
-      )
-    ),
+    header,
     React.createElement(
       'div',
       { className: 'terminal-output', ref: outputRef },
       ...outputElements,
       React.createElement(
         'div',
-        { style: { display: 'flex' } },
+        { style: { display: 'flex', alignItems: 'center' } },
         React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
-        React.createElement('span', null, input || (loading ? '...' : '')),
-        loading &&
-          React.createElement('span', { className: 'blinking-cursor' })
+        React.createElement('span', null, input || (loading ? 'Loading...' : '')),
+        loading && React.createElement('span', { className: 'blinking-cursor' })
       ),
       clearConfirmDialog
     ),
     suggestionList,
-    React.createElement(
-      'div',
-      { className: 'terminal-input-area' },
-      React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
-      React.createElement('input', {
-        ref: inputRef,
-        type: 'text',
-        className: 'terminal-input',
-        value: input,
-        onChange: handleInputChange,
-        onKeyDown: handleKeyDown,
-        placeholder: 'Type a command...',
-        spellCheck: false,
-        autoComplete: 'off',
-        autoFocus: true,
-        disabled: loading,
-      }),
-      loading &&
-        React.createElement('span', { className: 'spinner', style: { marginLeft: '8px' } }),
-      React.createElement(
-        'button',
-        {
-          className: 'btn btn-primary send-btn',
-          onClick: () => executeCommand(input),
-          disabled: loading || !input.trim(),
-        },
-        React.createElement('i', { className: 'ph ph-paper-plane-right' })
-      )
-    ),
-    React.createElement('style', null, `
-      @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0 } }
-      .blinking-cursor { display:inline-block; width:8px; height:1.2em; background:var(--accent-light); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:text-bottom; }
-    `)
+    inputArea
   );
-          }
+                }
