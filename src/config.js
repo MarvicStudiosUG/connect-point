@@ -17,4 +17,8 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 export const githubProvider = new GithubAuthProvider();
-export const MOVIE_API_KEY = 'trilogy';   // <-- ADD THIS LINE
+
+// --- Terminal API Keys (Leave empty to use free fallbacks) ---
+export const MOVIE_API_KEY = 'trilogy';   // Works for basic OMDB searches
+export const WEATHER_API_KEY = '';        // Empty = uses wttr.in (no key needed)
+export const MATH_API_ENABLED = true;     // Enables advanced math (uses eval)
