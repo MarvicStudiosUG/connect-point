@@ -179,7 +179,6 @@ body::before {
   height: 80vh;
   min-height: 500px;
   position: relative;
-  /* use theme background & border */
   background: var(--bg-secondary);
   color: var(--text-primary);
   border: 1px solid var(--border);
@@ -222,6 +221,10 @@ body::before {
 .btn-icon:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
+}
+.btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .terminal-output {
@@ -267,6 +270,49 @@ body::before {
   background: rgba(239, 68, 68, 0.1);
   padding: 4px 8px;
   border-radius: 4px;
+}
+
+/* ----- NEW: long output scroll container ----- */
+.long-output {
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+/* ----- NEW: modal overlay for clear confirm ----- */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-box {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 2rem;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.modal-box p {
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+}
+.btn-group {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
 }
 
 .terminal-input-area {
@@ -339,6 +385,7 @@ body::before {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ----- NEW: floating suggestion dropdown ----- */
 .terminal-suggestions {
   position: absolute;
   bottom: 60px;
@@ -370,56 +417,12 @@ body::before {
   color: #fff;
 }
 
-.terminal-clear-confirm {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--surface);
-  backdrop-filter: blur(12px);
-  padding: 24px 32px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  text-align: center;
-  z-index: 20;
-  min-width: 200px;
-}
-.terminal-clear-confirm p {
-  margin: 0 0 16px;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-.terminal-clear-confirm .btn-group {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-
-/* small buttons inside terminal */
-.btn {
-  padding: 8px 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-}
-.btn-primary:hover {
-  background: var(--accent-light);
-}
-.btn-secondary {
-  background: var(--text-secondary);
-  color: var(--bg-primary);
-}
-.btn-secondary:hover {
-  background: var(--text-primary);
+/* ----- NEW: history indicator ----- */
+.history-indicator {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  margin-left: 4px;
 }
 
 .blinking-cursor {
@@ -560,5 +563,5 @@ body::before {
   .terminal-input { font-size:13px; }
   .send-btn { padding:4px 10px; font-size:13px; }
   .terminal-suggestions { bottom:52px; left:10px; right:10px; max-height:80px; }
-  .terminal-clear-confirm { padding:16px 20px; min-width:160px; }
+  .modal-box { padding:1.5rem; }
   }
