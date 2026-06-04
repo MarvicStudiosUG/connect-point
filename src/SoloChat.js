@@ -341,8 +341,9 @@ export default function SoloChat() {
                 const data = await res.json();
                 if (data.lyrics) {
                   result = `Lyrics: ${song} by ${artist}\n\n${data.lyrics}`;
-                  if (result.length > 2000)
-                    result = result.slice(0, 2000) + '\n... (truncated)';
+                  if (result.length > 2000) {
+                    result = `<div class="long-output">${result}</div>`;
+                  }
                 } else result = 'No lyrics found.';
               }
               break;
@@ -819,17 +820,17 @@ export default function SoloChat() {
     React.createElement(
       'div',
       { className: 'terminal-header-actions' },
-      installAvailable &&
-        React.createElement(
-          'button',
-          {
-            className: 'btn-icon',
-            onClick: () => executeCommand('install'),
-            title: 'Install App',
-            'aria-label': 'Install App',
-          },
-          React.createElement('i', { className: 'ph ph-download-simple' })
-        ),
+      React.createElement(
+        'button',
+        {
+          className: 'btn-icon',
+          onClick: () => executeCommand('install'),
+          title: 'Install App',
+          'aria-label': 'Install App',
+          disabled: !installAvailable,
+        },
+        React.createElement('i', { className: 'ph ph-download-simple' })
+      ),
       React.createElement(
         'button',
         {
@@ -849,34 +850,40 @@ export default function SoloChat() {
     )
   );
 
-  const outputElements = history.map((entry, idx) =>
-    React.createElement(
+  const outputElements = history.map((entry, idx) => {
+    const isHTML = entry.type === 'response' && entry.text.includes('<div class="long-output">');
+    return React.createElement(
       'div',
       {
         key: idx,
         className: `terminal-line ${entry.type}${entry.type === 'response' ? ' response-card' : ''}`,
+        dangerouslySetInnerHTML: isHTML ? { __html: entry.text } : undefined,
       },
-      entry.text
-    )
-  );
+      isHTML ? null : entry.text
+    );
+  });
 
   const clearConfirmDialog = showClearConfirm
     ? React.createElement(
         'div',
-        { className: 'terminal-clear-confirm' },
-        React.createElement('p', null, 'Clear the terminal?'),
+        { className: 'modal-overlay' },
         React.createElement(
           'div',
-          { className: 'btn-group' },
+          { className: 'modal-box' },
+          React.createElement('p', null, 'Clear the terminal?'),
           React.createElement(
-            'button',
-            { className: 'btn btn-primary', onClick: () => confirmClear(true) },
-            'Yes'
-          ),
-          React.createElement(
-            'button',
-            { className: 'btn btn-secondary', onClick: () => confirmClear(false) },
-            'No'
+            'div',
+            { className: 'btn-group' },
+            React.createElement(
+              'button',
+              { className: 'btn btn-primary', onClick: () => confirmClear(true) },
+              'Yes'
+            ),
+            React.createElement(
+              'button',
+              { className: 'btn btn-secondary', onClick: () => confirmClear(false) },
+              'No'
+            )
           )
         )
       )
@@ -886,12 +893,13 @@ export default function SoloChat() {
     suggestions.length > 0
       ? React.createElement(
           'div',
-          { className: 'terminal-suggestions', role: 'listbox' },
+          { className: 'terminal-suggestions', role: 'listbox', 'aria-activedescendant': `suggestion-${selectedSuggestion}` },
           suggestions.map((s, i) =>
             React.createElement(
               'div',
               {
                 key: s,
+                id: `suggestion-${i}`,
                 className: `suggestion-item${i === selectedSuggestion ? ' selected' : ''}`,
                 onMouseDown: () => {
                   setInput(s + ' ');
@@ -907,6 +915,14 @@ export default function SoloChat() {
           )
         )
       : null;
+
+  const historyIndicator = historyIndex >= 0 && historyIndex < commandHistory.length
+    ? React.createElement(
+        'span',
+        { className: 'history-indicator' },
+        `(${historyIndex + 1}/${commandHistory.length})`
+      )
+    : null;
 
   const inputArea = React.createElement(
     'div',
@@ -926,6 +942,7 @@ export default function SoloChat() {
       disabled: loading,
       'aria-label': 'Terminal input',
     }),
+    historyIndicator,
     loading && React.createElement('span', { className: 'spinner' }),
     React.createElement(
       'button',
@@ -941,22 +958,15 @@ export default function SoloChat() {
 
   return React.createElement(
     'div',
-    { className: 'terminal', onClick: focusInput },
+    { className: 'terminal', onClick: focusInput, role: 'log', 'aria-live': 'polite' },
     header,
     React.createElement(
       'div',
       { className: 'terminal-output', ref: outputRef },
       ...outputElements,
-      React.createElement(
-        'div',
-        { style: { display: 'flex', alignItems: 'center' } },
-        React.createElement('span', { className: 'terminal-prompt' }, userName + ' ~ '),
-        React.createElement('span', null, input || (loading ? 'Loading...' : '')),
-        loading && React.createElement('span', { className: 'blinking-cursor' })
-      ),
       clearConfirmDialog
     ),
     suggestionList,
     inputArea
   );
-                }
+                                                                                        }
