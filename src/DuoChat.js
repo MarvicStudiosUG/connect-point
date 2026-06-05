@@ -51,6 +51,7 @@ export default function DuoChat() {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchInChat, setSearchInChat] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [enterToSend, setEnterToSend] = useState(true); // Toggle: Enter sends or adds newline
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef();
 
@@ -249,7 +250,8 @@ export default function DuoChat() {
       senderName: currentUser.displayName || currentUser.email,
       text: text || '',
       timestamp: serverTimestamp(),
-      reactions: {}
+      reactions: {},
+      status: 'sent' // Will be updated to 'delivered'/'seen' later
     };
     if (replyTo) {
       msgData.replyTo = { id: replyTo.id, text: replyTo.text, senderName: replyTo.senderName };
@@ -460,8 +462,9 @@ export default function DuoChat() {
     const hasReply = msg.replyTo;
     const isForwarded = msg.forwardedFrom;
     const timeStr = msg.timestamp?.toDate?.()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '';
+    const msgStatus = msg.status || 'sent';
 
-    // Floating reaction picker
+    // Floating reaction picker (appears on hover)
     const reactionPicker = React.createElement('div', { className: 'reaction-picker' },
       REACTION_TYPES.slice(0, 4).map(rdef =>
         React.createElement('button', {
@@ -534,10 +537,20 @@ export default function DuoChat() {
       }, React.createElement('i', { className: 'ph ph-trash', style: { color: 'var(--danger)' } }))
     ]);
 
-    // Status indicator (sent/delivered/seen placeholder)
-    const statusIndicator = isOwn ? React.createElement('div', {
+    // Status indicator (sent, delivered, seen)
+    const statusIcon = isOwn ? React.createElement('div', {
       className: 'message-status'
-    }, React.createElement('i', { className: 'ph ph-check' })) : null;
+    }, [
+      React.createElement('i', {
+        key: 'status',
+        className: msgStatus === 'seen' ? 'ph ph-check-double' :
+                   msgStatus === 'delivered' ? 'ph ph-check-double' : 'ph ph-check',
+        style: {
+          color: msgStatus === 'seen' ? 'var(--success)' :
+                 msgStatus === 'delivered' ? 'var(--accent-light)' : 'var(--text-secondary)'
+        }
+      })
+    ]) : null;
 
     // Edited badge
     const editedBadge = isEdited ? React.createElement('span', {
@@ -569,7 +582,7 @@ export default function DuoChat() {
         style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }
       }, [
         React.createElement('div', { key: 'time', className: 'bubble-time' }, timeStr),
-        statusIndicator,
+        statusIcon,
         messageActions
       ])
     ]);
@@ -789,28 +802,29 @@ export default function DuoChat() {
       }, React.createElement('i', { className: 'ph ph-x' }))
     ]) : null;
 
-    // Input tools (emoji, attach)
-    const inputTools = React.createElement('div', { className: 'input-tools' }, [
-      React.createElement('button', {
-        key: 'emoji',
-        className: 'btn-icon',
-        type: 'button',
-        onClick: () => { /* emoji picker placeholder */ },
-        title: 'Emoji picker'
-      }, React.createElement('i', { className: 'ph ph-smiley' })),
-      React.createElement('button', {
-        key: 'attach',
-        className: 'btn-icon',
-        type: 'button',
-        title: 'Attach file'
-      }, React.createElement('i', { className: 'ph ph-paperclip' }))
-    ]);
-
+    // Input form with Enter to send toggle (Shift+Enter for newline)
     const inputForm = React.createElement('form', {
       className: 'chat-input-area',
       onSubmit: handleSendMessage
     }, [
-      inputTools,
+      // Enter to send toggle (optional settings)
+      React.createElement('div', {
+        key: 'settings',
+        style: { display: 'flex', alignItems: 'center', gap: '6px', marginRight: '4px' }
+      }, [
+        React.createElement('label', {
+          key: 'label',
+          style: { fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }
+        }, [
+          React.createElement('input', {
+            key: 'checkbox',
+            type: 'checkbox',
+            checked: enterToSend,
+            onChange: e => setEnterToSend(e.target.checked)
+          }),
+          'Enter sends'
+        ])
+      ]),
       React.createElement('input', {
         key: 'input',
         className: 'input-field',
@@ -820,7 +834,19 @@ export default function DuoChat() {
         placeholder: editMessage ? 'Edit message...' : forwardMessage ? 'Add a note...' : 'Type a message...',
         onFocus: () => handleTyping(true),
         onBlur: () => handleTyping(false),
-        onKeyDown: e => e.key === 'Enter' && !e.shiftKey && handleSendMessage(e),
+        onKeyDown: e => {
+          if (e.key === 'Enter') {
+            if (enterToSend && !e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage(e);
+            }
+            // If enterToSend is false, Shift+Enter sends, Enter adds newline
+            else if (!enterToSend && e.shiftKey) {
+              e.preventDefault();
+              handleSendMessage(e);
+            }
+          }
+        },
         style: { flex: 1, marginBottom: 0, padding: '10px 16px', borderRadius: '24px' }
       }),
       React.createElement('button', {
@@ -835,7 +861,7 @@ export default function DuoChat() {
       }))
     ]);
 
-    // Main chat container - improved mobile layout
+    // Main chat container
     return React.createElement('div', {
       className: 'duo-container chat-active',
       style: {
@@ -935,4 +961,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-                               }
+            }
