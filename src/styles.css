@@ -666,23 +666,6 @@ body::before {
   margin-bottom: 0;
   order: 2;
 }
-.input-tools {
-  display: flex;
-  gap: 2px;
-  padding: 0 4px;
-  align-items: center;
-  order: 1;
-  width: 100%;
-  justify-content: flex-end;
-  margin-bottom: 2px;
-}
-@media (min-width: 600px) {
-  .input-tools {
-    width: auto;
-    order: 0;
-    margin-bottom: 0;
-  }
-}
 
 /* Reply/Edit/Forward bars */
 .reply-bar {
