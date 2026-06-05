@@ -114,13 +114,11 @@ export default function DuoChat() {
         const data = d.data();
         const friendId = data.participants.find(id => id !== currentUser.uid);
         if (friendId) {
-          // Get unread count
           try {
             const chatRef = doc(db, 'chats', d.id);
             const chatDoc = await getDoc(chatRef);
             const chatData = chatDoc.data();
             const lastRead = chatData?.lastRead?.[currentUser.uid];
-            // Safely handle lastRead timestamp
             let lastReadTime = 0;
             if (lastRead) {
               if (typeof lastRead === 'object' && lastRead?.toDate) {
@@ -129,7 +127,6 @@ export default function DuoChat() {
                 lastReadTime = lastRead;
               }
             }
-            // Count messages after lastRead
             const msgsQ = query(
               collection(db, 'chats', d.id, 'messages'),
               where('timestamp', '>', new Date(lastReadTime))
@@ -138,7 +135,6 @@ export default function DuoChat() {
             const unread = msgsSnap.size;
             friendList.push({ chatId: d.id, friendId, unread });
           } catch (e) {
-            // If error, assume 0 unread
             friendList.push({ chatId: d.id, friendId, unread: 0 });
           }
         }
@@ -278,13 +274,12 @@ export default function DuoChat() {
     if (!item) return null;
     if (item.type === 'date') {
       return React.createElement('div', {
-        style: { ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 0' }
+        style: { ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 0' }
       }, React.createElement('span', { className: 'date-divider' }, item.date));
     }
     const msg = item.msg;
     const lower = searchInChat.toLowerCase();
     const text = msg.text || '';
-    // Highlight matches
     let highlightedText = text;
     if (searchInChat.trim() && text.toLowerCase().includes(lower)) {
       const parts = text.split(new RegExp(`(${searchInChat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
@@ -621,6 +616,7 @@ export default function DuoChat() {
     ]);
   }
 
+  // ===== MODERN MESSAGE BUBBLE =====
   function MessageBubble({ msg, style }) {
     const isOwn = msg.senderId === currentUser.uid;
     const reactions = msg.reactions || {};
@@ -633,21 +629,10 @@ export default function DuoChat() {
     const isSeen = seenBy.includes(currentUser.uid) && !isOwn;
     const isDelivered = seenBy.length > 1;
 
-    // Floating reaction picker
-    const reactionPicker = React.createElement('div', { className: 'reaction-picker' },
-      REACTION_TYPES.slice(0, 4).map(rdef =>
-        React.createElement('button', {
-          key: rdef.type,
-          onClick: () => handleAddReaction(msg.id, rdef.type),
-          title: rdef.label
-        }, React.createElement('i', { className: rdef.icon }))
-      )
-    );
-
     // Reaction pills
     const reactionPills = hasReactions ? React.createElement('div', {
       className: 'reactions-bar',
-      style: { marginTop: '4px' }
+      style: { marginTop: '3px' }
     }, Object.entries(reactions).map(([type, users]) => {
       const rdef = REACTION_TYPES.find(r => r.type === type);
       const icon = rdef ? rdef.icon : 'ph-thumbs-up';
@@ -670,7 +655,7 @@ export default function DuoChat() {
         key: 'label',
         style: { fontWeight: 'bold', fontSize: '0.7rem', color: 'var(--text-secondary)' }
       }, msg.replyTo.senderName + ': '),
-      React.createElement('span', { key: 'text', style: { fontSize: '0.8rem' } }, msg.replyTo.text)
+      React.createElement('span', { key: 'text', style: { fontSize: '0.7rem' } }, msg.replyTo.text)
     ]) : null;
 
     // Forward indicator
@@ -678,35 +663,52 @@ export default function DuoChat() {
       style: { fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '2px' }
     }, 'Forwarded from ' + msg.forwardedFrom.senderName) : null;
 
+    // Quick reaction buttons
+    const quickReactions = React.createElement('div', {
+      style: { display: 'flex', gap: '2px', marginTop: '2px' }
+    }, REACTION_TYPES.slice(0, 4).map(rdef =>
+      React.createElement('button', {
+        key: rdef.type,
+        className: 'btn-icon',
+        title: rdef.label,
+        onClick: () => handleAddReaction(msg.id, rdef.type),
+        style: { fontSize: '0.9rem', padding: '0 3px' }
+      }, React.createElement('i', { className: rdef.icon }))
+    ));
+
     // Message actions
     const messageActions = React.createElement('div', { className: 'message-actions' }, [
       React.createElement('button', {
         key: 'reply',
         className: 'btn-icon',
         title: 'Reply',
-        onClick: () => setReplyTo({ id: msg.id, text: msg.text, senderName: msg.senderName })
+        onClick: () => setReplyTo({ id: msg.id, text: msg.text, senderName: msg.senderName }),
+        style: { fontSize: '0.9rem', padding: '2px' }
       }, React.createElement('i', { className: 'ph ph-arrow-bend-left-up' })),
       React.createElement('button', {
         key: 'forward',
         className: 'btn-icon',
         title: 'Forward',
-        onClick: () => handleForwardMessage(msg)
+        onClick: () => handleForwardMessage(msg),
+        style: { fontSize: '0.9rem', padding: '2px' }
       }, React.createElement('i', { className: 'ph ph-arrow-bend-right-down' })),
       isOwn && React.createElement('button', {
         key: 'edit',
         className: 'btn-icon',
         title: 'Edit',
-        onClick: () => handleEditMessage(msg)
+        onClick: () => handleEditMessage(msg),
+        style: { fontSize: '0.9rem', padding: '2px' }
       }, React.createElement('i', { className: 'ph ph-pencil-simple' })),
       React.createElement('button', {
         key: 'delete',
         className: 'btn-icon',
         title: 'Delete',
-        onClick: () => handleDeleteMessage(msg.id)
-      }, React.createElement('i', { className: 'ph ph-trash', style: { color: 'var(--danger)' } }))
+        onClick: () => handleDeleteMessage(msg.id),
+        style: { fontSize: '0.9rem', padding: '2px', color: 'var(--danger)' }
+      }, React.createElement('i', { className: 'ph ph-trash' }))
     ]);
 
-    // Status indicator (sent, delivered, seen)
+    // Status indicator (read receipts)
     const statusIcon = isOwn ? React.createElement('div', {
       className: 'message-status'
     }, [
@@ -724,6 +726,18 @@ export default function DuoChat() {
       style: { fontSize: '0.6rem', opacity: 0.6, marginLeft: '4px' }
     }, '(edited)') : null;
 
+    // Highlight search matches
+    let textContent = msg.text;
+    if (searchInChat.trim() && msg.text?.toLowerCase().includes(searchInChat.toLowerCase())) {
+      const lower = searchInChat.toLowerCase();
+      const parts = msg.text.split(new RegExp(`(${searchInChat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+      textContent = parts.map((part, i) => 
+        part.toLowerCase() === lower ? 
+          React.createElement('span', { key: i, className: 'highlight' }, part) : 
+          React.createElement('span', { key: i }, part)
+      );
+    }
+
     return React.createElement('div', {
       className: `chat-bubble ${isOwn ? 'own' : 'other'}`,
       style
@@ -731,19 +745,9 @@ export default function DuoChat() {
       reactionPicker,
       replyPreview,
       forwardIndicator,
-      React.createElement('div', { key: 'text', className: 'bubble-text' }, msg.text),
+      React.createElement('div', { key: 'text', className: 'bubble-text' }, textContent),
       editedBadge,
-      React.createElement('div', {
-        key: 'quick-reactions',
-        style: { display: 'flex', gap: '2px', marginTop: '2px' }
-      }, REACTION_TYPES.slice(0, 4).map(rdef =>
-        React.createElement('button', {
-          key: rdef.type,
-          className: 'btn-icon',
-          title: rdef.label,
-          onClick: () => handleAddReaction(msg.id, rdef.type)
-        }, React.createElement('i', { className: rdef.icon }))
-      )),
+      quickReactions,
       reactionPills,
       React.createElement('div', {
         key: 'bottom',
@@ -917,7 +921,6 @@ export default function DuoChat() {
     const typingFromFriend = typingUsers.includes(foundUser.uid);
     const initials = (foundUser.displayName || foundUser.email || '?').slice(0, 2).toUpperCase();
 
-    // Safely format last seen
     let lastSeenText = 'Offline';
     try {
       if (friendPresence?.lastSeen?.toDate) {
@@ -987,7 +990,7 @@ export default function DuoChat() {
       }, React.createElement('i', { className: 'ph ph-x' }))
     ]) : null;
 
-    // Input form with Enter to send toggle
+    // Input form
     const inputForm = React.createElement('form', {
       className: 'chat-input-area',
       onSubmit: handleSendMessage
@@ -1029,21 +1032,21 @@ export default function DuoChat() {
             }
           }
         },
-        style: { flex: 1, marginBottom: 0, padding: '10px 16px', borderRadius: '24px' }
+        style: { flex: 1, marginBottom: 0, padding: '12px 18px', borderRadius: '24px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '0.95rem', outline: 'none' }
       }),
       React.createElement('button', {
         key: 'send',
         type: 'submit',
         className: 'btn btn-primary',
         disabled: !newMessage.trim() && !forwardMessage,
-        style: { padding: '8px 14px', borderRadius: '50%', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+        style: { padding: '10px 16px', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px var(--accent-glow)' }
       }, React.createElement('i', {
         className: `ph ${editMessage ? 'ph-pencil-simple' : forwardMessage ? 'ph-arrow-bend-right-down' : 'ph-paper-plane-right'}`,
         style: { fontSize: '1.1rem' }
       }))
     ]);
 
-    // Main chat container with virtual list
+    // Main chat container
     return React.createElement('div', {
       className: 'duo-container chat-active',
       style: {
@@ -1059,7 +1062,8 @@ export default function DuoChat() {
         React.createElement('button', {
           key: 'back',
           className: 'btn-icon',
-          onClick: () => { setView('main'); setChatId(null); setShowSearchBar(false); }
+          onClick: () => { setView('main'); setChatId(null); setShowSearchBar(false); },
+          style: { padding: '8px', borderRadius: '50%', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }
         }, React.createElement('i', { className: 'ph ph-arrow-left' })),
         React.createElement('div', { key: 'avatar', className: 'avatar' }, initials),
         React.createElement('div', { key: 'info', className: 'user-info' }, [
@@ -1075,22 +1079,21 @@ export default function DuoChat() {
         React.createElement('div', { key: 'actions', className: 'actions' }, [
           React.createElement('button', {
             key: 'search',
-            className: 'btn-icon',
             title: 'Search in chat',
-            onClick: () => setShowSearchBar(!showSearchBar)
+            onClick: () => setShowSearchBar(!showSearchBar),
+            style: { padding: '8px', borderRadius: '50%', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }
           }, React.createElement('i', { className: 'ph ph-magnifying-glass' })),
           React.createElement('button', {
             key: 'export',
-            className: 'btn-icon',
             title: 'Export chat',
-            onClick: handleExportChat
+            onClick: handleExportChat,
+            style: { padding: '8px', borderRadius: '50%', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }
           }, React.createElement('i', { className: 'ph ph-download-simple' })),
           React.createElement('button', {
             key: 'unfriend',
-            className: 'btn-icon',
             title: 'Unfriend',
             onClick: () => handleUnfriend(foundUser.uid),
-            style: { color: 'var(--danger)' }
+            style: { padding: '8px', borderRadius: '50%', background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1.2rem' }
           }, React.createElement('i', { className: 'ph ph-user-minus' }))
         ])
       ]),
@@ -1118,11 +1121,11 @@ export default function DuoChat() {
         filteredGrouped.length === 0
           ? React.createElement('div', {
               className: 'empty-state',
-              style: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }
+              style: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1.5rem', color: 'var(--text-secondary)', textAlign: 'center' }
             }, [
-              React.createElement('i', { key: 'icon', className: 'ph ph-chat-circle-dots icon' }),
-              React.createElement('h4', { key: 'title' }, 'No messages yet'),
-              React.createElement('p', { key: 'desc' }, 'Say hello to your friend!')
+              React.createElement('i', { key: 'icon', className: 'ph ph-chat-circle-dots icon', style: { fontSize: '3.5rem', opacity: '0.2', marginBottom: '1rem' } }),
+              React.createElement('h4', { key: 'title', style: { color: 'var(--text-primary)', fontSize: '1.1rem', marginBottom: '0.4rem' } }, 'No messages yet'),
+              React.createElement('p', { key: 'desc', style: { fontSize: '0.9rem', maxWidth: '280px' } }, 'Say hello to your friend!')
             ])
           : React.createElement(List, {
               ref: listRef,
