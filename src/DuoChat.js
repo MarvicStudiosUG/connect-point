@@ -87,7 +87,11 @@ export default function DuoChat() {
   // --- Scroll to bottom on new messages ---
   useEffect(() => {
     if (!listRef.current) return;
-    listRef.current.scrollToItem(messages.length - 1, 'end');
+    try {
+      listRef.current.scrollToItem(messages.length - 1, 'end');
+    } catch (e) {
+      // Ignore scroll errors
+    }
   }, [messages]);
 
   // --- Friend requests listener ---
@@ -111,18 +115,32 @@ export default function DuoChat() {
         const friendId = data.participants.find(id => id !== currentUser.uid);
         if (friendId) {
           // Get unread count
-          const chatRef = doc(db, 'chats', d.id);
-          const chatDoc = await getDoc(chatRef);
-          const chatData = chatDoc.data();
-          const lastRead = chatData?.lastRead?.[currentUser.uid] || 0;
-          // Count messages after lastRead
-          const msgsQ = query(
-            collection(db, 'chats', d.id, 'messages'),
-            where('timestamp', '>', new Date(lastRead))
-          );
-          const msgsSnap = await getDocs(msgsQ);
-          const unread = msgsSnap.size;
-          friendList.push({ chatId: d.id, friendId, unread });
+          try {
+            const chatRef = doc(db, 'chats', d.id);
+            const chatDoc = await getDoc(chatRef);
+            const chatData = chatDoc.data();
+            const lastRead = chatData?.lastRead?.[currentUser.uid];
+            // Safely handle lastRead timestamp
+            let lastReadTime = 0;
+            if (lastRead) {
+              if (typeof lastRead === 'object' && lastRead?.toDate) {
+                lastReadTime = lastRead.toDate().getTime();
+              } else if (typeof lastRead === 'number') {
+                lastReadTime = lastRead;
+              }
+            }
+            // Count messages after lastRead
+            const msgsQ = query(
+              collection(db, 'chats', d.id, 'messages'),
+              where('timestamp', '>', new Date(lastReadTime))
+            );
+            const msgsSnap = await getDocs(msgsQ);
+            const unread = msgsSnap.size;
+            friendList.push({ chatId: d.id, friendId, unread });
+          } catch (e) {
+            // If error, assume 0 unread
+            friendList.push({ chatId: d.id, friendId, unread: 0 });
+          }
         }
       }
       setFriends(friendList);
@@ -152,26 +170,30 @@ export default function DuoChat() {
       orderBy('timestamp', 'asc')
     );
     const unsub = onSnapshot(q, async snapshot => {
-      const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setMessages(msgs);
+      try {
+        const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setMessages(msgs);
 
-      // Mark messages as seen by current user (read receipt)
-      const unseenMsgs = msgs.filter(m => 
-        m.senderId !== currentUser.uid && 
-        !(m.seenBy || []).includes(currentUser.uid)
-      );
-      for (const msg of unseenMsgs) {
-        await updateDoc(doc(db, 'chats', chatId, 'messages', msg.id), {
-          seenBy: [...(msg.seenBy || []), currentUser.uid]
-        });
-      }
+        // Mark messages as seen by current user (read receipt)
+        const unseenMsgs = msgs.filter(m => 
+          m.senderId !== currentUser.uid && 
+          !(m.seenBy || []).includes(currentUser.uid)
+        );
+        for (const msg of unseenMsgs) {
+          await updateDoc(doc(db, 'chats', chatId, 'messages', msg.id), {
+            seenBy: [...(msg.seenBy || []), currentUser.uid]
+          });
+        }
 
-      // Update lastRead timestamp for this chat
-      if (msgs.length > 0) {
-        const chatRef = doc(db, 'chats', chatId);
-        await updateDoc(chatRef, {
-          [`lastRead.${currentUser.uid}`]: serverTimestamp()
-        });
+        // Update lastRead timestamp for this chat
+        if (msgs.length > 0) {
+          const chatRef = doc(db, 'chats', chatId);
+          await updateDoc(chatRef, {
+            [`lastRead.${currentUser.uid}`]: serverTimestamp()
+          });
+        }
+      } catch (e) {
+        console.error('Error in messages listener:', e);
       }
     });
     return () => unsub();
@@ -192,22 +214,51 @@ export default function DuoChat() {
     );
   }, [searchInChat, messages]);
 
+  // --- Safe date formatting helper ---
+  const safeFormatTime = useCallback((timestamp) => {
+    if (!timestamp) return '??';
+    try {
+      if (typeof timestamp === 'object' && timestamp?.toDate) {
+        const date = timestamp.toDate();
+        if (date instanceof Date && !isNaN(date.getTime())) {
+          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      }
+      return '??';
+    } catch (e) {
+      return '??';
+    }
+  }, []);
+
+  const safeFormatDate = useCallback((timestamp) => {
+    if (!timestamp) return '';
+    try {
+      if (typeof timestamp === 'object' && timestamp?.toDate) {
+        const date = timestamp.toDate();
+        if (date instanceof Date && !isNaN(date.getTime())) {
+          return date.toLocaleDateString();
+        }
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }, []);
+
   // --- Memoized message grouping with date separators ---
   const groupedMessages = useMemo(() => {
     const result = [];
     let currentDate = null;
     messages.forEach(msg => {
-      const date = msg.timestamp?.toDate?.()?.toLocaleDateString() || '';
-      if (date !== currentDate) {
+      const date = safeFormatDate(msg.timestamp);
+      if (date && date !== currentDate) {
         currentDate = date;
-        if (date) {
-          result.push({ type: 'date', date, key: `date-${date}` });
-        }
+        result.push({ type: 'date', date, key: `date-${date}` });
       }
       result.push({ type: 'message', msg, key: msg.id });
     });
     return result;
-  }, [messages]);
+  }, [messages, safeFormatDate]);
 
   // --- Filtered grouped messages for search (with highlighting) ---
   const filteredGrouped = useMemo(() => {
@@ -436,7 +487,7 @@ export default function DuoChat() {
 
   const handleExportChat = () => {
     const text = messages.map(m =>
-      `[${m.timestamp?.toDate?.()?.toLocaleTimeString() || '??'}] ${m.senderName}: ${m.text}`
+      `[${safeFormatTime(m.timestamp)}] ${m.senderName}: ${m.text}`
     ).join('\n');
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -577,7 +628,7 @@ export default function DuoChat() {
     const isEdited = msg.edited === true;
     const hasReply = msg.replyTo;
     const isForwarded = msg.forwardedFrom;
-    const timeStr = msg.timestamp?.toDate?.()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '';
+    const timeStr = safeFormatTime(msg.timestamp);
     const seenBy = msg.seenBy || [];
     const isSeen = seenBy.includes(currentUser.uid) && !isOwn;
     const isDelivered = seenBy.length > 1;
@@ -866,6 +917,19 @@ export default function DuoChat() {
     const typingFromFriend = typingUsers.includes(foundUser.uid);
     const initials = (foundUser.displayName || foundUser.email || '?').slice(0, 2).toUpperCase();
 
+    // Safely format last seen
+    let lastSeenText = 'Offline';
+    try {
+      if (friendPresence?.lastSeen?.toDate) {
+        const date = friendPresence.lastSeen.toDate();
+        if (date instanceof Date && !isNaN(date.getTime())) {
+          lastSeenText = 'Last seen ' + date.toLocaleTimeString();
+        }
+      }
+    } catch (e) {
+      lastSeenText = 'Offline';
+    }
+
     // Typing indicator
     const typingIndicator = typingFromFriend ? React.createElement('div', {
       className: 'typing-indicator'
@@ -874,6 +938,17 @@ export default function DuoChat() {
       React.createElement('div', { key: 'd2', className: 'typing-dot' }),
       React.createElement('div', { key: 'd3', className: 'typing-dot' })
     ]) : null;
+
+    // Render date dividers and messages
+    const messageElements = filteredGrouped.map(item => {
+      if (item.type === 'date') {
+        return React.createElement('div', {
+          key: item.key,
+          className: 'date-divider'
+        }, React.createElement('span', null, item.date));
+      }
+      return React.createElement(MessageBubble, { key: item.key, msg: item.msg });
+    });
 
     // Bars for reply, edit, forward
     const replyBar = replyTo ? React.createElement('div', { className: 'reply-bar' }, [
@@ -993,7 +1068,7 @@ export default function DuoChat() {
             isOnline ? React.createElement('span', { className: 'online-dot' }) : null
           ]),
           React.createElement('div', { key: 'status', className: 'user-status' }, [
-            isOnline ? 'Online' : (friendPresence?.lastSeen?.toDate?.()?.toLocaleTimeString() ?? 'Offline'),
+            isOnline ? 'Online' : lastSeenText,
             typingFromFriend ? ' • Typing…' : ''
           ])
         ]),
@@ -1081,4 +1156,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-                              }
+  }
