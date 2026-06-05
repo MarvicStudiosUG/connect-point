@@ -504,7 +504,7 @@ body::before {
   padding: 8px 8px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
 }
 .chat-messages::-webkit-scrollbar { width: 4px; }
@@ -514,20 +514,21 @@ body::before {
   border-radius: 4px;
 }
 
-/* --- IMPROVED CHAT BUBBLES --- */
+/* ===== MODERN CHAT BUBBLES ===== */
 .chat-bubble {
   position: relative;
-  max-width: 80%;
-  padding: 10px 14px;
-  border-radius: 18px;
+  max-width: 65%;
+  padding: 10px 16px;
+  border-radius: 16px;
   word-wrap: break-word;
-  font-size: 0.95rem;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-  transition: transform 0.1s;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   animation: messageSlide 0.25s ease-out;
+  transition: all 0.2s ease;
 }
 @keyframes messageSlide {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -542,12 +543,13 @@ body::before {
   position: absolute;
   bottom: 0;
   right: -8px;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   background: var(--accent);
   clip-path: polygon(0 0, 100% 100%, 0 100%);
-  border-radius: 0 0 4px 0;
+  border-radius: 0 0 3px 0;
 }
+
 .chat-bubble.other {
   align-self: flex-start;
   background: var(--surface);
@@ -560,20 +562,22 @@ body::before {
   position: absolute;
   bottom: 0;
   left: -8px;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   background: var(--surface);
   clip-path: polygon(100% 0, 0 100%, 100% 100%);
-  border-radius: 0 0 0 4px;
+  border-radius: 0 0 0 3px;
   border: 1px solid var(--border);
   border-right: none;
   border-top: none;
 }
 
+/* --- BUBBLE TIME (small and discreet) --- */
 .bubble-time { 
-  font-size: 0.6rem; 
-  opacity: 0.7; 
+  font-size: 0.55rem; 
+  opacity: 0.5; 
   margin-top: 2px; 
+  line-height: 1;
 }
 
 /* --- MESSAGE STATUS (read receipts) --- */
@@ -581,7 +585,7 @@ body::before {
   display: flex;
   align-items: center;
   gap: 2px;
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   margin-top: 2px;
   opacity: 0.6;
 }
@@ -591,12 +595,12 @@ body::before {
 /* --- IMPROVED REACTION PICKER --- */
 .reaction-picker {
   position: absolute;
-  top: -38px;
+  top: -36px;
   right: 0;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 4px 8px;
+  border-radius: 18px;
+  padding: 2px 6px;
   display: flex;
   gap: 2px;
   opacity: 0;
@@ -614,15 +618,15 @@ body::before {
 .reaction-picker button {
   background: none;
   border: none;
-  font-size: 1.1rem;
+  font-size: 1rem;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 8px;
+  padding: 0 4px;
+  border-radius: 6px;
   transition: transform 0.15s, background 0.15s;
   color: var(--text-secondary);
 }
 .reaction-picker button:hover {
-  transform: scale(1.25);
+  transform: scale(1.2);
   background: var(--surface-hover);
   color: var(--text-primary);
 }
@@ -630,8 +634,8 @@ body::before {
 /* --- REACTION PILLS --- */
 .reactions-bar { 
   display: flex; 
-  gap: 4px; 
-  margin-top: 4px; 
+  gap: 3px; 
+  margin-top: 3px; 
   flex-wrap: wrap; 
 }
 .reaction-item {
@@ -639,10 +643,25 @@ body::before {
   align-items: center; 
   gap: 2px;
   background: var(--surface); 
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 0 6px; 
   cursor: pointer; 
   border: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+.reaction-item:hover {
+  background: var(--surface-hover);
+}
+
+/* --- REPLY PREVIEW --- */
+.reply-preview {
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--accent);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  opacity: 0.8;
 }
 
 /* --- CHAT INPUT AREA --- */
@@ -676,18 +695,18 @@ body::before {
   flex-shrink: 0;
 }
 
-/* --- DATE DIVIDER --- */
+/* --- DATE DIVIDER (smaller) --- */
 .date-divider {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 0;
+  padding: 8px 0;
 }
 .date-divider span {
   background: var(--surface);
-  padding: 4px 16px;
-  border-radius: 20px;
-  font-size: 0.75rem;
+  padding: 2px 12px;
+  border-radius: 12px;
+  font-size: 0.6rem;
   font-weight: 500;
   color: var(--text-secondary);
   border: 1px solid var(--border);
@@ -698,16 +717,16 @@ body::before {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 14px;
+  padding: 6px 12px;
   background: var(--surface);
-  border-radius: 18px;
+  border-radius: 16px;
   width: fit-content;
   margin: 4px 12px;
   border: 1px solid var(--border);
 }
 .typing-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--text-secondary);
   animation: typingBounce 1.4s infinite ease-in-out;
@@ -891,7 +910,7 @@ body::before {
 @media (max-width: 600px) {
   .chat-header { padding: 6px 10px; min-height: 52px; }
   .chat-header .avatar { width: 34px; height: 34px; font-size: 0.8rem; }
-  .chat-bubble { max-width: 92%; padding: 8px 12px; font-size: 0.88rem; }
+  .chat-bubble { max-width: 85%; padding: 8px 12px; font-size: 0.85rem; }
   .btn { padding: 6px 12px; font-size: 0.8rem; }
   .btn-icon { padding: 6px; font-size: 1.1rem; }
   .input-field { font-size: 0.9rem; padding: 8px 12px; }
