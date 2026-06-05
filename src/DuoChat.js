@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   collection, query, orderBy, onSnapshot,
   addDoc, serverTimestamp, where, doc,
-  updateDoc, getDoc, setDoc, increment
+  updateDoc, getDoc, getDocs
 } from 'firebase/firestore';
 import { FixedSizeList as List } from 'react-window';
 import {
@@ -84,7 +84,7 @@ export default function DuoChat() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // --- Scroll to bottom ---
+  // --- Scroll to bottom on new messages ---
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollToItem(messages.length - 1, 'end');
@@ -348,7 +348,7 @@ export default function DuoChat() {
       text: text || '',
       timestamp: serverTimestamp(),
       reactions: {},
-      seenBy: [currentUser.uid] // sender has seen it
+      seenBy: [currentUser.uid]
     };
     if (replyTo) {
       msgData.replyTo = { id: replyTo.id, text: replyTo.text, senderName: replyTo.senderName };
@@ -580,7 +580,7 @@ export default function DuoChat() {
     const timeStr = msg.timestamp?.toDate?.()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '';
     const seenBy = msg.seenBy || [];
     const isSeen = seenBy.includes(currentUser.uid) && !isOwn;
-    const isDelivered = seenBy.length > 1; // at least one other person has seen it
+    const isDelivered = seenBy.length > 1;
 
     // Floating reaction picker
     const reactionPicker = React.createElement('div', { className: 'reaction-picker' },
@@ -1053,7 +1053,7 @@ export default function DuoChat() {
               ref: listRef,
               height: 400,
               itemCount: filteredGrouped.length,
-              itemSize: 80, // approximate height per row
+              itemSize: 80,
               width: '100%',
               style: { overflow: 'auto' }
             }, Row)
@@ -1081,4 +1081,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-}
+                              }
