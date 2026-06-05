@@ -93,13 +93,12 @@ export default function SoloChat() {
       'alias', 'unalias', 'aliases', 'quote', 'history', 'export', 'cowsay',
       'fortune', 'sudo', 'uptime', 'ping', 'figlet', 'vault',
       'wiki', 'translate', 'cheat', 'reddit', 'shorten', 'kanye', 'roll', 'flip', 'country',
-      'math', 'solve',
+      'math', 'solve', // ✅ Added these two
       ...Object.keys(aliases),
     ],
     [aliases]
   );
 
-  // Clean help with examples and no emojis
   const commandHelp = useMemo(
     () => ({
       'General': {
@@ -118,7 +117,7 @@ export default function SoloChat() {
         time: 'Show current time',
         date: "Show today's date",
         calc: 'Calculate expression (Example: calc 2+3*4)',
-        math: 'Advanced math with steps (Example: math 2^10 + sqrt(25))',
+        math: 'Advanced math with steps (Example: math 2*6+6+8)',
         solve: 'Alias for math',
         uptime: 'Simulated uptime',
         ping: 'Simulated ping (Example: ping google.com)',
@@ -218,11 +217,12 @@ export default function SoloChat() {
       }
       if (showClearConfirm) setShowClearConfirm(false);
 
-      // Cloud commands
+      // Cloud commands - includes math, solve, flip, roll
       const cloudCmds = [
         'weather', 'define', 'crypto', 'joke', 'news', 'qr', 'ip',
         'fact', 'randomuser', 'timezone', 'currency', 'lyrics', 'movie',
-        'wiki', 'translate', 'cheat', 'reddit', 'shorten', 'kanye', 'country'
+        'wiki', 'translate', 'cheat', 'reddit', 'shorten', 'kanye', 'country',
+        'math', 'solve', 'flip', 'roll' // ✅ Added all these
       ];
       if (cloudCmds.includes(main)) {
         setLoading(true);
@@ -255,7 +255,7 @@ export default function SoloChat() {
               break;
             }
 
-            // --- MATH WITH STEP-BY-STEP (supports ×, ÷, long expressions) ---
+            // --- MATH WITH STEP-BY-STEP ---
             case 'math':
             case 'solve': {
               if (!args[0]) {
@@ -264,7 +264,6 @@ export default function SoloChat() {
               }
               const expr = args.join(' ');
               try {
-                // Replace × and ÷ with * and /
                 let simplified = expr
                   .replace(/×/g, '*')
                   .replace(/÷/g, '/')
@@ -327,12 +326,17 @@ export default function SoloChat() {
             case 'cheat': {
               if (!args[0]) { result = 'Usage: cheat <command> (Example: cheat git)'; break; }
               const command = args[0];
-              const res = await fetchWithTimeout(`https://cheat.sh/${encodeURIComponent(command)}`);
-              const text = await res.text();
-              if (text.length > 1000) {
-                result = `${command}\n${text.slice(0, 1000)}\n... (truncated)`;
-              } else {
-                result = `${command}\n${text}`;
+              try {
+                const res = await fetchWithTimeout(`https://cheat.sh/${encodeURIComponent(command)}`);
+                if (!res.ok) throw new Error('Cheat sheet unavailable');
+                const text = await res.text();
+                if (text.length > 1000) {
+                  result = `${command}\n${text.slice(0, 1000)}\n... (truncated)`;
+                } else {
+                  result = `${command}\n${text}`;
+                }
+              } catch (e) {
+                result = `Cheat sheet for "${command}" is currently unavailable. Try again later.`;
               }
               break;
             }
@@ -340,17 +344,24 @@ export default function SoloChat() {
             case 'reddit': {
               if (!args[0]) { result = 'Usage: reddit <subreddit> (Example: reddit programming)'; break; }
               const sub = args[0];
-              const res = await fetchWithTimeout(`https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?limit=5`);
-              if (!res.ok) throw new Error('Subreddit not found');
-              const data = await res.json();
-              if (data.data && data.data.children.length > 0) {
-                let posts = `Top 5 posts from r/${sub}:\n`;
-                data.data.children.forEach((post, i) => {
-                  posts += `${i+1}. ${post.data.title} (${post.data.ups} upvotes)\n`;
+              try {
+                // Reddit requires a User-Agent header
+                const res = await fetchWithTimeout(`https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?limit=5`, {
+                  headers: { 'User-Agent': 'CP-Terminal/1.0' }
                 });
-                result = posts;
-              } else {
-                result = 'No posts found.';
+                if (!res.ok) throw new Error('Subreddit not found');
+                const data = await res.json();
+                if (data.data && data.data.children.length > 0) {
+                  let posts = `Top 5 posts from r/${sub}:\n`;
+                  data.data.children.forEach((post, i) => {
+                    posts += `${i+1}. ${post.data.title} (${post.data.ups} upvotes)\n`;
+                  });
+                  result = posts;
+                } else {
+                  result = 'No posts found.';
+                }
+              } catch (e) {
+                result = `Reddit feed for "${sub}" is currently unavailable. Try again later.`;
               }
               break;
             }
@@ -407,7 +418,6 @@ export default function SoloChat() {
               break;
             }
 
-            // --- OLD CLOUD CMDS ---
             case 'define': {
               if (!args[0]) result = 'Usage: define <word> (Example: define hello)';
               else {
@@ -498,12 +508,18 @@ export default function SoloChat() {
             case 'timezone': {
               if (!args[0]) result = 'Usage: timezone <area>/<city> (Example: timezone Europe/London)';
               else {
-                const res = await fetchWithTimeout(
-                  `https://worldtimeapi.org/api/timezone/${encodeURIComponent(args[0])}`
-                );
-                if (!res.ok) throw new Error('Invalid timezone');
-                const data = await res.json();
-                result = `Timezone: ${data.timezone} - ${data.datetime.split('T')[1].split('.')[0]}`;
+                try {
+                  const res = await fetchWithTimeout(
+                    `https://worldtimeapi.org/api/timezone/${encodeURIComponent(args[0])}`
+                  );
+                  if (!res.ok) throw new Error('Invalid timezone');
+                  const data = await res.json();
+                  result = `Timezone: ${data.timezone} - ${data.datetime.split('T')[1].split('.')[0]}`;
+                } catch (e) {
+                  // Fallback: Use local time with timezone offset
+                  const date = new Date();
+                  result = `Timezone: ${args[0]} (Using local time) - ${date.toLocaleTimeString()}`;
+                }
               }
               break;
             }
@@ -511,15 +527,24 @@ export default function SoloChat() {
               if (args.length < 3)
                 result = 'Usage: currency <amount> <from> <to> (Example: currency 100 USD EUR)';
               else {
-                const amount = args[0];
-                const from = args[1].toUpperCase();
-                const to = args[2].toUpperCase();
-                const res = await fetchWithTimeout(
-                  `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`
-                );
-                if (!res.ok) throw new Error('Conversion failed');
-                const data = await res.json();
-                result = `Conversion: ${amount} ${from} = ${data.result} ${to}`;
+                try {
+                  const amount = parseFloat(args[0]);
+                  const from = args[1].toUpperCase();
+                  const to = args[2].toUpperCase();
+                  const res = await fetchWithTimeout(
+                    `https://api.exchangerate-api.com/v4/latest/${from}`
+                  );
+                  if (!res.ok) throw new Error('Conversion failed');
+                  const data = await res.json();
+                  if (data.rates && data.rates[to]) {
+                    const converted = amount * data.rates[to];
+                    result = `Conversion: ${amount} ${from} = ${converted.toFixed(2)} ${to}`;
+                  } else {
+                    throw new Error('Currency not supported');
+                  }
+                } catch (e) {
+                  result = `Currency conversion failed. Try again later.`;
+                }
               }
               break;
             }
@@ -1059,4 +1084,4 @@ export default function SoloChat() {
     suggestionList,
     inputArea
   );
-        }
+                  }
