@@ -272,7 +272,6 @@ body::before {
   border-radius: 4px;
 }
 
-/* ----- NEW: long output scroll container ----- */
 .long-output {
   max-height: 300px;
   overflow-y: auto;
@@ -283,7 +282,6 @@ body::before {
   margin-top: 4px;
 }
 
-/* ----- NEW: modal overlay for clear confirm ----- */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -385,7 +383,6 @@ body::before {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ----- NEW: floating suggestion dropdown ----- */
 .terminal-suggestions {
   position: absolute;
   bottom: 60px;
@@ -417,7 +414,6 @@ body::before {
   color: #fff;
 }
 
-/* ----- NEW: history indicator ----- */
 .history-indicator {
   color: var(--text-secondary);
   font-size: 0.8rem;
@@ -446,7 +442,6 @@ body::before {
   flex-direction: column; 
 }
 
-/* Improved chat header */
 .chat-header {
   display: flex;
   align-items: center;
@@ -499,7 +494,6 @@ body::before {
   flex-shrink: 0;
 }
 
-/* Chat messages container - improved scrolling */
 .chat-messages {
   flex: 1;
   overflow-y: auto;
@@ -510,7 +504,6 @@ body::before {
   min-height: 0;
 }
 
-/* Chat bubbles with tails and animation */
 .chat-bubble {
   position: relative;
   max-width: 80%;
@@ -578,7 +571,6 @@ body::before {
   margin-top: 2px; 
 }
 
-/* Message status indicator */
 .message-status {
   display: flex;
   align-items: center;
@@ -590,7 +582,6 @@ body::before {
 .message-status .delivered { color: var(--accent-light); }
 .message-status .seen { color: var(--success); }
 
-/* Floating reaction picker */
 .reaction-picker {
   position: absolute;
   top: -38px;
@@ -629,7 +620,6 @@ body::before {
   color: var(--text-primary);
 }
 
-/* Reaction pills */
 .reactions-bar { 
   display: flex; 
   gap: 4px; 
@@ -647,7 +637,6 @@ body::before {
   border: 1px solid var(--border);
 }
 
-/* Chat input area */
 .chat-input-area {
   display: flex;
   gap: 6px;
@@ -667,7 +656,6 @@ body::before {
   order: 2;
 }
 
-/* Reply/Edit/Forward bars */
 .reply-bar {
   display: flex;
   align-items: center;
@@ -678,7 +666,6 @@ body::before {
   flex-shrink: 0;
 }
 
-/* Date divider */
 .date-divider {
   display: flex;
   align-items: center;
@@ -695,7 +682,6 @@ body::before {
   border: 1px solid var(--border);
 }
 
-/* Typing indicator */
 .typing-indicator {
   display: flex;
   align-items: center;
@@ -722,7 +708,6 @@ body::before {
   30% { transform: translateY(-8px); }
 }
 
-/* Online dot */
 .online-dot {
   display: inline-block; 
   width: 8px; 
@@ -738,7 +723,6 @@ body::before {
   100%{ box-shadow:0 0 0 0 rgba(34,197,94,0); }
 }
 
-/* Badge for friend requests */
 .badge {
   background: var(--danger);
   color: white;
@@ -752,7 +736,6 @@ body::before {
   line-height: 1.4;
 }
 
-/* Empty state */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -836,37 +819,14 @@ body::before {
   font-family: var(--font-body); line-height:1.6;
 }
 
-/* ========== Responsive ========== */
-@media (max-width: 600px) {
-  .chat-header { padding: 6px 10px; min-height: 52px; }
-  .chat-header .avatar { width: 34px; height: 34px; font-size: 0.8rem; }
-  .chat-bubble { max-width: 92%; padding: 8px 12px; font-size: 0.88rem; }
-  .btn { padding: 6px 12px; font-size: 0.8rem; }
-  .btn-icon { padding: 6px; font-size: 1.1rem; }
-  .input-field { font-size: 0.9rem; padding: 8px 12px; }
-  .chat-input-area { padding: 6px 10px 10px; gap: 4px; }
-  .chat-input-area .btn-primary { width: 40px; height: 40px; }
-  .bottom-nav { 
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
-    padding-top: 6px;
-  }
-  .nav-item { padding: 4px 8px; }
-  .nav-item i { font-size: 1.3rem; }
-  .glass { padding: 1rem; border-radius: 16px; }
-  .rooms-grid { gap: 8px; }
-  .room-card { padding: 12px; }
-  .modal-box { padding: 1.2rem; width: 92%; }
-  .terminal { margin: 10px; height: 90vh; border-radius: 8px; }
-  .terminal-header { padding: 8px 12px; }
-  .terminal-output { padding: 8px 10px; }
-  .terminal-input-area { padding: 6px 10px 10px; }
-  .terminal-prompt { font-size: 13px; }
-  .terminal-input { font-size: 13px; }
-  .send-btn { padding: 4px 10px; font-size: 13px; }
-  .terminal-suggestions { bottom: 52px; left: 10px; right: 10px; max-height: 80px; }
-  }
+/* ========== NEW FEATURES ========== */
+
 /* Toast notifications */
 .toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
   padding: 12px 20px;
   border-radius: 12px;
   color: white;
@@ -875,6 +835,7 @@ body::before {
   align-items: center;
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
   animation: slideIn 0.3s ease-out;
+  max-width: 400px;
 }
 .toast.success { background: var(--success); }
 .toast.error { background: var(--danger); }
@@ -910,3 +871,34 @@ body::before {
   flex: 1;
   overflow: hidden;
 }
+
+/* ========== Responsive ========== */
+@media (max-width: 600px) {
+  .chat-header { padding: 6px 10px; min-height: 52px; }
+  .chat-header .avatar { width: 34px; height: 34px; font-size: 0.8rem; }
+  .chat-bubble { max-width: 92%; padding: 8px 12px; font-size: 0.88rem; }
+  .btn { padding: 6px 12px; font-size: 0.8rem; }
+  .btn-icon { padding: 6px; font-size: 1.1rem; }
+  .input-field { font-size: 0.9rem; padding: 8px 12px; }
+  .chat-input-area { padding: 6px 10px 10px; gap: 4px; }
+  .chat-input-area .btn-primary { width: 40px; height: 40px; }
+  .bottom-nav { 
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding-top: 6px;
+  }
+  .nav-item { padding: 4px 8px; }
+  .nav-item i { font-size: 1.3rem; }
+  .glass { padding: 1rem; border-radius: 16px; }
+  .rooms-grid { gap: 8px; }
+  .room-card { padding: 12px; }
+  .modal-box { padding: 1.2rem; width: 92%; }
+  .terminal { margin: 10px; height: 90vh; border-radius: 8px; }
+  .terminal-header { padding: 8px 12px; }
+  .terminal-output { padding: 8px 10px; }
+  .terminal-input-area { padding: 6px 10px 10px; }
+  .terminal-prompt { font-size: 13px; }
+  .terminal-input { font-size: 13px; }
+  .send-btn { padding: 4px 10px; font-size: 13px; }
+  .terminal-suggestions { bottom: 52px; left: 10px; right: 10px; max-height: 80px; }
+  .toast { top: 10px; right: 10px; max-width: 90%; font-size: 0.85rem; padding: 10px 16px; }
+  }
