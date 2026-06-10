@@ -629,6 +629,17 @@ export default function DuoChat() {
     const isSeen = seenBy.includes(currentUser.uid) && !isOwn;
     const isDelivered = seenBy.length > 1;
 
+    // ✅ Reaction picker (floating)
+    const reactionPicker = React.createElement('div', { className: 'reaction-picker' },
+      REACTION_TYPES.slice(0, 4).map(rdef =>
+        React.createElement('button', {
+          key: rdef.type,
+          onClick: () => handleAddReaction(msg.id, rdef.type),
+          title: rdef.label
+        }, React.createElement('i', { className: rdef.icon }))
+      )
+    );
+
     // Reaction pills
     const reactionPills = hasReactions ? React.createElement('div', {
       className: 'reactions-bar',
@@ -1159,4 +1170,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-  }
+            }
