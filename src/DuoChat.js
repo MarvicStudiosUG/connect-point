@@ -4,7 +4,7 @@ import {
   addDoc, serverTimestamp, where, doc,
   updateDoc, getDoc, getDocs
 } from 'firebase/firestore';
-import { FixedSizeList as List } from 'react-window';
+import { VariableSizeList as List } from 'react-window';
 import {
   db,
   getUserByCpCode,
@@ -31,7 +31,6 @@ const REACTION_TYPES = [
   { type: 'angry', icon: 'ph-smiley-angry', label: 'Angry' }
 ];
 
-// Toast component
 function Toast({ message, type, onClose }) {
   React.useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -76,7 +75,8 @@ export default function DuoChat() {
   const [toast, setToast] = useState(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef();
-  const listRef = useRef();
+  const listRef = useRef(); // now VariableSizeList ref
+  const sizeMap = useRef({}); // stores measured heights
 
   // --- Toast helper ---
   const showToast = useCallback((message, type = 'info') => {
@@ -86,11 +86,11 @@ export default function DuoChat() {
 
   // --- Scroll to bottom on new messages ---
   useEffect(() => {
-    if (!listRef.current) return;
+    if (!listRef.current || messages.length === 0) return;
     try {
       listRef.current.scrollToItem(messages.length - 1, 'end');
     } catch (e) {
-      // Ignore scroll errors
+      // Ignore
     }
   }, [messages]);
 
@@ -170,7 +170,6 @@ export default function DuoChat() {
         const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         setMessages(msgs);
 
-        // Mark messages as seen by current user (read receipt)
         const unseenMsgs = msgs.filter(m =>
           m.senderId !== currentUser.uid &&
           !(m.seenBy || []).includes(currentUser.uid)
@@ -181,7 +180,6 @@ export default function DuoChat() {
           });
         }
 
-        // Update lastRead timestamp for this chat
         if (msgs.length > 0) {
           const chatRef = doc(db, 'chats', chatId);
           await updateDoc(chatRef, {
@@ -210,7 +208,6 @@ export default function DuoChat() {
     );
   }, [searchInChat, messages]);
 
-  // --- Safe date formatting helper ---
   const safeFormatTime = useCallback((timestamp) => {
     if (!timestamp) return '??';
     try {
@@ -256,7 +253,7 @@ export default function DuoChat() {
     return result;
   }, [messages, safeFormatDate]);
 
-  // --- Filtered grouped messages for search (with highlighting) ---
+  // --- Filtered grouped messages for search ---
   const filteredGrouped = useMemo(() => {
     if (!searchInChat.trim()) return groupedMessages;
     const lower = searchInChat.toLowerCase();
@@ -268,28 +265,72 @@ export default function DuoChat() {
     });
   }, [groupedMessages, searchInChat]);
 
-  // --- Virtual list row renderer ---
-  const Row = useCallback(({ index, style }) => {
+  // --- Dynamic size calculation for VariableSizeList ---
+  const getItemSize = useCallback((index) => {
     const item = filteredGrouped[index];
+    if (!item) return 0;
+    if (item.type === 'date') return 32; // date divider height
+
+    // Use cached measured height if available
+    if (sizeMap.current[item.key]) return sizeMap.current[item.key];
+
+    // Estimate based on text length and extras
+    const msg = item.msg;
+    const text = msg.text || '';
+    const reply = msg.replyTo ? 20 : 0;
+    const forward = msg.forwardedFrom ? 20 : 0;
+    const reactions = Object.keys(msg.reactions || {}).length > 0 ? 24 : 0;
+    const hasActions = true; // always show actions row
+
+    // Rough character-based height: assume ~60 chars per line, line height ~20px
+    const lines = Math.ceil(text.length / 60);
+    const textHeight = Math.max(20, lines * 20);
+    const padding = 16; // vertical padding
+    const actionsHeight = 20;
+    const baseHeight = padding + textHeight + reactions + reply + forward + actionsHeight;
+    return baseHeight;
+  }, [filteredGrouped]);
+
+  // Measure actual heights after render and update size cache
+  const handleRowHeightMeasured = useCallback((index, node) => {
+    if (!node) return;
+    const item = filteredGrouped[index];
+    if (!item || item.type === 'date') return;
+    const height = node.getBoundingClientRect().height;
+    if (height > 0 && sizeMap.current[item.key] !== height) {
+      sizeMap.current[item.key] = height;
+      listRef.current?.resetAfterIndex(index);
+    }
+  }, [filteredGrouped]);
+
+  // --- Row renderer ---
+  const Row = useCallback(({ index, style, data }) => {
+    const item = data[index]; // passing filteredGrouped as data
     if (!item) return null;
+
     if (item.type === 'date') {
       return React.createElement('div', {
         style: { ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 0' }
       }, React.createElement('span', { className: 'date-divider' }, item.date));
     }
-    const msg = item.msg;
-    return React.createElement(MessageBubble, {
-      key: msg.id,
-      msg,
-      style, // style contains absolute positioning from react-window
-      searchTerm: searchInChat
-    });
-  }, [filteredGrouped, searchInChat]);
 
-  // --- isFriend helper ---
+    const msg = item.msg;
+    // Use a callback ref to measure height after render
+    return React.createElement('div', {
+      style: { ...style, overflow: 'visible' } // allow popups
+    }, [
+      React.createElement(MessageBubble, {
+        key: msg.id,
+        msg,
+        searchTerm: searchInChat,
+        onMount: (node) => handleRowHeightMeasured(index, node) // measure after mount
+      })
+    ]);
+  }, [searchInChat, handleRowHeightMeasured]);
+
+  // --- Handlers ---
   const isFriend = useCallback(uid => friends.some(f => f.friendId === uid), [friends]);
 
-  // ===== Handlers =====
   const handleSearchByCode = async () => {
     const code = searchInput.trim().toUpperCase();
     if (!code.startsWith('CP-') || code.length !== 13) {
@@ -607,7 +648,7 @@ export default function DuoChat() {
   }
 
   // ===== MODERN MESSAGE BUBBLE =====
-  function MessageBubble({ msg, style }) {
+  function MessageBubble({ msg, searchTerm, onMount }) {
     const isOwn = msg.senderId === currentUser.uid;
     const reactions = msg.reactions || {};
     const hasReactions = Object.keys(reactions).length > 0;
@@ -618,12 +659,15 @@ export default function DuoChat() {
     const seenBy = msg.seenBy || [];
     const isSeen = seenBy.includes(currentUser.uid) && !isOwn;
     const isDelivered = seenBy.length > 1;
-
-    // Local state to toggle the full reaction picker
     const [showReactionPicker, setShowReactionPicker] = useState(false);
 
-    // Helper to highlight search term in text
-    const highlightText = (text, searchTerm) => {
+    // Use a ref to call onMount (for height measurement)
+    const bubbleRef = useRef(null);
+    useEffect(() => {
+      if (bubbleRef.current && onMount) onMount(bubbleRef.current);
+    }, [onMount]);
+
+    const highlightText = (text) => {
       if (!searchTerm || !text) return text;
       const lower = searchTerm.toLowerCase();
       if (!text.toLowerCase().includes(lower)) return text;
@@ -635,43 +679,31 @@ export default function DuoChat() {
       );
     };
 
-    const textContent = highlightText(msg.text || '', searchInChat);
+    const textContent = highlightText(msg.text || '');
 
-    // Reply preview
-    const replyPreview = hasReply ? React.createElement('div', { className: 'reply-preview' }, [
-      React.createElement('span', {
-        key: 'label',
-        style: { fontWeight: 'bold', fontSize: '0.7rem', color: 'var(--text-secondary)' }
-      }, msg.replyTo.senderName + ': '),
-      React.createElement('span', { key: 'text', style: { fontSize: '0.7rem' } }, msg.replyTo.text)
+    const replyPreview = hasReply ? React.createElement('div', { className: 'reply-preview', style: { fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' } }, [
+      React.createElement('span', { key: 'label', style: { fontWeight: 'bold' } }, msg.replyTo.senderName + ': '),
+      React.createElement('span', { key: 'text' }, msg.replyTo.text)
     ]) : null;
 
-    // Forward indicator
     const forwardIndicator = isForwarded ? React.createElement('div', {
-      style: { fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '2px' }
+      style: { fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' }
     }, 'Forwarded from ' + msg.forwardedFrom.senderName) : null;
 
-    // Edited badge
     const editedBadge = isEdited ? React.createElement('span', {
       style: { fontSize: '0.6rem', opacity: 0.6, marginLeft: '4px' }
     }, '(edited)') : null;
 
-    // Status icon (read receipts)
-    const statusIcon = isOwn ? React.createElement('span', {
-      className: 'message-status',
-      style: { marginLeft: '6px' }
-    }, React.createElement('i', {
-      className: isSeen ? 'ph ph-check-double' : isDelivered ? 'ph ph-check-double' : 'ph ph-check',
-      style: {
-        color: isSeen ? 'var(--success)' : isDelivered ? 'var(--accent-light)' : 'var(--text-secondary)',
-        fontSize: '0.8rem'
-      }
-    })) : null;
+    const statusIcon = isOwn ? React.createElement('span', { style: { marginLeft: '6px' } },
+      React.createElement('i', {
+        className: isSeen ? 'ph ph-check-double' : isDelivered ? 'ph ph-check-double' : 'ph ph-check',
+        style: { color: isSeen ? 'var(--success)' : isDelivered ? 'var(--accent-light)' : 'var(--text-secondary)', fontSize: '0.8rem' }
+      })
+    ) : null;
 
-    // Reaction pills (existing reactions)
     const reactionPills = hasReactions ? React.createElement('div', {
       className: 'reactions-bar',
-      style: { display: 'flex', gap: '4px', marginTop: '4px' }
+      style: { display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }
     }, Object.entries(reactions).map(([type, users]) => {
       const rdef = REACTION_TYPES.find(r => r.type === type);
       const icon = rdef ? rdef.icon : 'ph-thumbs-up';
@@ -686,14 +718,10 @@ export default function DuoChat() {
         }
       }, [
         React.createElement('i', { key: 'icon', className: icon, style: { fontSize: '0.9rem' } }),
-        React.createElement('span', {
-          key: 'count',
-          style: { fontSize: '0.7rem', color: 'var(--text-secondary)' }
-        }, users.length)
+        React.createElement('span', { key: 'count', style: { fontSize: '0.7rem', color: 'var(--text-secondary)' } }, users.length)
       ]);
     })) : null;
 
-    // Quick reaction buttons (first 4 reactions)
     const quickReactions = React.createElement('div', {
       style: { display: 'flex', gap: '2px', marginTop: '4px' }
     }, REACTION_TYPES.slice(0, 4).map(rdef =>
@@ -706,7 +734,6 @@ export default function DuoChat() {
       }, React.createElement('i', { className: rdef.icon }))
     ));
 
-    // Message actions (reply, forward, edit, delete)
     const messageActions = React.createElement('div', {
       className: 'message-actions',
       style: { display: 'flex', gap: '2px', marginTop: '4px' }
@@ -741,14 +768,13 @@ export default function DuoChat() {
       }, React.createElement('i', { className: 'ph ph-trash' }))
     ]);
 
-    // Full reaction picker (popup)
     const reactionPickerPopup = showReactionPicker ? React.createElement('div', {
-      className: 'reaction-picker-popup',
       style: {
-        display: 'flex', gap: '4px', padding: '6px', background: 'var(--surface)',
-        borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        display: 'flex', gap: '4px', padding: '6px',
+        background: 'var(--surface)', borderRadius: '16px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
         position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%',
-        transform: 'translateX(-50%)', zIndex: 10
+        transform: 'translateX(-50%)', zIndex: 20
       }
     }, REACTION_TYPES.map(r => React.createElement('button', {
       key: r.type,
@@ -762,7 +788,6 @@ export default function DuoChat() {
       style: { fontSize: '1.3rem', padding: '4px' }
     }, React.createElement('i', { className: r.icon })))) : null;
 
-    // "+" button to open full picker
     const openPickerButton = React.createElement('button', {
       className: 'btn-icon',
       title: 'Add reaction',
@@ -770,54 +795,40 @@ export default function DuoChat() {
       style: { fontSize: '0.9rem', padding: '2px 4px', marginTop: '4px' }
     }, React.createElement('i', { className: 'ph ph-smiley-plus' }));
 
-    // Combine time, status, edited badge, and actions into a bottom row
     const bottomRow = React.createElement('div', {
-      style: {
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginTop: '6px', flexWrap: 'wrap', gap: '4px'
-      }
+      style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap', gap: '4px' }
     }, [
-      React.createElement('div', {
-        key: 'time-status',
-        style: { display: 'flex', alignItems: 'center', gap: '4px' }
-      }, [
-        React.createElement('span', { key: 'time', className: 'bubble-time', style: { fontSize: '0.7rem', color: 'var(--text-secondary)' } }, timeStr),
+      React.createElement('div', { key: 'time-status', style: { display: 'flex', alignItems: 'center', gap: '4px' } }, [
+        React.createElement('span', { key: 'time', style: { fontSize: '0.7rem', color: isOwn ? 'rgba(255,255,255,0.7)' : 'var(--text-secondary)' } }, timeStr),
         editedBadge,
         statusIcon
       ]),
       messageActions
     ]);
 
-    // Main bubble content
-    const bubbleContent = [
+    return React.createElement('div', {
+      ref: bubbleRef,
+      className: `chat-bubble ${isOwn ? 'own' : 'other'}`,
+      style: {
+        maxWidth: '80%',
+        margin: isOwn ? '0 0 0 auto' : '0 auto 0 0',
+        padding: '8px 12px',
+        borderRadius: '16px',
+        background: isOwn ? 'var(--accent)' : 'var(--surface)',
+        color: isOwn ? 'white' : 'var(--text-primary)',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+        position: 'relative',
+        wordBreak: 'break-word'
+      }
+    }, [
       replyPreview,
       forwardIndicator,
-      React.createElement('div', { key: 'text', className: 'bubble-text', style: { wordBreak: 'break-word' } }, textContent),
+      React.createElement('div', { key: 'text', className: 'bubble-text' }, textContent),
       quickReactions,
       reactionPills,
       openPickerButton,
       reactionPickerPopup,
       bottomRow
-    ];
-
-    // Wrapper: react-window gives absolute positioning via `style`. We wrap with a relative container to position popups correctly.
-    return React.createElement('div', {
-      style: { ...style, position: 'relative' } // ensure popup can be positioned relative to this
-    }, [
-      React.createElement('div', {
-        key: 'bubble',
-        className: `chat-bubble ${isOwn ? 'own' : 'other'}`,
-        style: {
-          maxWidth: '80%',
-          margin: isOwn ? '0 0 0 auto' : '0 auto 0 0',
-          padding: '8px 12px',
-          borderRadius: '16px',
-          background: isOwn ? 'var(--accent)' : 'var(--surface)',
-          color: isOwn ? 'white' : 'var(--text-primary)',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-          position: 'relative'
-        }
-      }, bubbleContent)
     ]);
   }
 
@@ -854,20 +865,13 @@ export default function DuoChat() {
           style: { marginBottom: '12px', fontSize: '1rem', color: 'var(--text-secondary)' }
         }, 'Your Friends'),
         friends.length === 0
-          ? React.createElement('div', {
-              key: 'empty',
-              className: 'empty-state'
-            }, [
+          ? React.createElement('div', { key: 'empty', className: 'empty-state' }, [
               React.createElement('i', { key: 'icon', className: 'ph ph-users icon' }),
               React.createElement('h4', { key: 'title' }, 'No friends yet'),
               React.createElement('p', { key: 'desc' }, 'Search by CP code or name to add.')
             ])
           : React.createElement('div', { key: 'list', className: 'rooms-grid' },
-              friends.map(f => React.createElement(FriendCard, {
-                key: f.chatId,
-                friendId: f.friendId,
-                unread: f.unread || 0
-              }))
+              friends.map(f => React.createElement(FriendCard, { key: f.chatId, friendId: f.friendId, unread: f.unread || 0 }))
             )
       ])
     );
@@ -925,10 +929,7 @@ export default function DuoChat() {
             }, React.createElement('i', { className: 'ph ph-magnifying-glass' }))
           ])
         ]),
-        searchError && React.createElement('div', {
-          key: 'error',
-          className: 'error-msg'
-        }, searchError),
+        searchError && React.createElement('div', { key: 'error', className: 'error-msg' }, searchError),
         foundUser && React.createElement('div', {
           key: 'result',
           className: 'glass',
@@ -994,7 +995,6 @@ export default function DuoChat() {
       lastSeenText = 'Offline';
     }
 
-    // Typing indicator
     const typingIndicator = typingFromFriend ? React.createElement('div', {
       className: 'typing-indicator',
       style: { padding: '4px 16px' }
@@ -1004,7 +1004,6 @@ export default function DuoChat() {
       React.createElement('div', { key: 'd3', className: 'typing-dot' })
     ]) : null;
 
-    // Bars for reply, edit, forward
     const replyBar = replyTo ? React.createElement('div', { className: 'reply-bar' }, [
       React.createElement('div', { key: 'content', style: { flex: 1 } }, [
         React.createElement('div', { style: { fontSize: '0.7rem', color: 'var(--text-secondary)' } }, 'Replying to ' + replyTo.senderName),
@@ -1041,7 +1040,6 @@ export default function DuoChat() {
       }, React.createElement('i', { className: 'ph ph-x' }))
     ]) : null;
 
-    // Input form
     const inputForm = React.createElement('form', {
       className: 'chat-input-area',
       onSubmit: handleSendMessage
@@ -1097,7 +1095,6 @@ export default function DuoChat() {
       }))
     ]);
 
-    // Main chat container
     return React.createElement('div', {
       className: 'duo-container chat-active',
       style: {
@@ -1108,7 +1105,6 @@ export default function DuoChat() {
         overflow: 'hidden'
       }
     }, [
-      // Header
       React.createElement('div', { key: 'header', className: 'chat-header' }, [
         React.createElement('button', {
           key: 'back',
@@ -1148,7 +1144,6 @@ export default function DuoChat() {
           }, React.createElement('i', { className: 'ph ph-user-minus' }))
         ])
       ]),
-      // Search bar
       showSearchBar && React.createElement('div', {
         key: 'searchbar',
         style: { padding: '8px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px' }
@@ -1167,7 +1162,6 @@ export default function DuoChat() {
           style: { fontSize: '0.75rem', color: 'var(--text-secondary)' }
         }, searchResults.length > 0 ? `${searchResults.length} results` : '')
       ]),
-      // Virtual message list
       React.createElement('div', { key: 'messages', style: { flex: 1, overflow: 'hidden' } },
         filteredGrouped.length === 0
           ? React.createElement('div', {
@@ -1182,20 +1176,18 @@ export default function DuoChat() {
               ref: listRef,
               height: 400,
               itemCount: filteredGrouped.length,
-              itemSize: 80,
+              itemSize: getItemSize,
               width: '100%',
+              itemData: filteredGrouped, // pass as data prop
+              estimatedItemSize: 80, // fallback
               style: { overflow: 'auto' }
             }, Row)
       ),
-      // Typing indicator
       typingIndicator,
-      // Reply/Edit/Forward bars
       replyBar,
       editBar,
       forwardBar,
-      // Input form
       inputForm,
-      // Toast
       toast && React.createElement(Toast, {
         message: toast.message,
         type: toast.type,
@@ -1210,4 +1202,4 @@ export default function DuoChat() {
     case 'chat': return renderChatView();
     default: return renderMainView();
   }
-         }
+                     }
