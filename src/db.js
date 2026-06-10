@@ -341,3 +341,43 @@ export async function verifyVaultPassword(uid, password) {
   const stored = await getVaultPassword(uid);
   return stored === password;
 }
+// ---------- Block/Unblock ----------
+export async function toggleBlockUser(uid, blockedUid) {
+  const userRef = doc(db, 'users', uid);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) return;
+  const blocked = snap.data().blocked || [];
+  if (blocked.includes(blockedUid)) {
+    await updateDoc(userRef, { blocked: blocked.filter(id => id !== blockedUid) });
+  } else {
+    await updateDoc(userRef, { blocked: [...blocked, blockedUid] });
+  }
+}
+
+export async function isUserBlocked(uid, otherUid) {
+  const snap = await getDoc(doc(db, 'users', uid));
+  const blocked = snap.data()?.blocked || [];
+  return blocked.includes(otherUid);
+}
+
+// ---------- Mute/Pin Chat ----------
+export async function setChatMuted(chatId, uid, muted) {
+  await updateDoc(doc(db, 'chats', chatId), {
+    [`muted.${uid}`]: muted
+  });
+}
+
+export async function setChatPinned(chatId, uid, pinned) {
+  await updateDoc(doc(db, 'chats', chatId), {
+    [`pinned.${uid}`]: pinned
+  });
+}
+
+// ---------- Cancel Friend Request ----------
+export async function cancelFriendRequest(requestId, uid) {
+  const ref = doc(db, 'friendRequests', requestId);
+  const snap = await getDoc(ref);
+  if (snap.exists() && snap.data().from === uid && snap.data().status === 'pending') {
+    await deleteDoc(ref);
+  }
+}
