@@ -851,3 +851,49 @@ body::before {
   .toast { top: 10px; right: 10px; max-width: 90%; font-size: 0.85rem; padding: 10px 16px; }
   .date-divider span { font-size: 0.65rem; padding: 3px 10px; }
   }
+/* ===== NEW STYLES ===== */
+.message-group { margin-bottom: 8px; }
+.chat-bubble.compact { margin-top: 0; margin-bottom: 2px; padding-top: 2px; padding-bottom: 2px; }
+.floating-scroll {
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+}
+.unread-badge {
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+.modal-overlay {
+  position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.modal-box {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 2rem;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
